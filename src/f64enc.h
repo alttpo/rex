@@ -9,17 +9,17 @@ typedef uint8_t u8;
 
 enum f64enc_error {
     F64ENC_ERR_SUCCESS,
-    F64ENC_ERR_NULL_FRAME_ARG,
-    F64ENC_ERR_NULL_FRAME_DELIVERER,
-    F64ENC_ERR_NULL_BUFFER_ARG,
-    F64ENC_ERR_DELIVERY_FAILURE
+    F64ENC_ERR_NULL_FRAME_ARG = -1,
+    F64ENC_ERR_NULL_FRAME_WRITER = -2,
+    F64ENC_ERR_NULL_BUFFER_ARG = -3,
+    F64ENC_ERR_DELIVERY_FAILURE = -4
 };
 
 // frame-delivery delegate:
 typedef struct {
     void *ctx;
-    int (*deliver_frame)(void *ctx, unsigned len, const u8 *data);
-} f64enc_deliverer;
+    int (*write_frame)(void *ctx, unsigned len, const u8 *data);
+} f64enc_writer;
 
 typedef struct {
     // current frame including header byte at data[0]:
@@ -28,15 +28,13 @@ typedef struct {
     // index into data[] of next write:
     unsigned index;
 
-    // delegate to invoke to deliver a frame to its final destination:
-    f64enc_deliverer deliverer;
+    // delegate to invoke to write a frame to its final destination:
+    f64enc_writer writer;
 } f64enc;
 
-enum f64enc_error f64enc_init(f64enc *f, f64enc_deliverer deliverer);
+enum f64enc_error f64enc_init(f64enc *f, f64enc_writer writer);
 
 enum f64enc_error f64enc_reset(f64enc *f);
-
-enum f64enc_error f64enc_deliver(f64enc *f);
 
 enum f64enc_error f64enc_set_final(f64enc *f, bool isFinal);
 
@@ -45,5 +43,7 @@ enum f64enc_error f64enc_set_delimiter(f64enc *f, u8 delim);
 enum f64enc_error f64enc_append_u8(f64enc *f, u8 byte);
 
 enum f64enc_error f64enc_append_buf(f64enc *f, unsigned len, const u8 *bytes);
+
+enum f64enc_error f64enc_write(f64enc *f);
 
 #endif //REX_F64ENC_H

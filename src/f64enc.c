@@ -7,15 +7,15 @@ void f64enc_reset_internal(f64enc *f) {
     f->index = 1;
 }
 
-enum f64enc_error f64enc_init(f64enc *f, f64enc_deliverer deliverer) {
+enum f64enc_error f64enc_init(f64enc *f, f64enc_writer writer) {
     if (!f) {
         return F64ENC_ERR_NULL_FRAME_ARG;
     }
-    if (!deliverer.deliver_frame) {
-        return F64ENC_ERR_NULL_FRAME_DELIVERER;
+    if (!writer.write_frame) {
+        return F64ENC_ERR_NULL_FRAME_WRITER;
     }
 
-    f->deliverer = deliverer;
+    f->writer = writer;
     f64enc_reset_internal(f);
 
     return F64ENC_ERR_SUCCESS;
@@ -31,7 +31,7 @@ enum f64enc_error f64enc_reset(f64enc *f) {
     return F64ENC_ERR_SUCCESS;
 }
 
-enum f64enc_error f64enc_deliver(f64enc *f) {
+enum f64enc_error f64enc_write(f64enc *f) {
     unsigned len;
 
     if (!f) {
@@ -48,12 +48,15 @@ enum f64enc_error f64enc_deliver(f64enc *f) {
 
     assert(len < 64);
 
-    // attempt delivery:
-    enum f64enc_error ret = f->deliverer.deliver_frame(f->deliverer.ctx, 1 + len, f->data);
+    // attempt write:
+    int ret = f->writer.write_frame(f->writer.ctx, 1 + len, f->data);
+    if (ret) {
+        return ret;
+    }
 
     f64enc_reset_internal(f);
 
-    return ret;
+    return F64ENC_ERR_SUCCESS;
 }
 
 enum f64enc_error f64enc_set_final(f64enc *f, bool isFinal) {
@@ -91,7 +94,7 @@ static enum f64enc_error f64enc_attempt_delivery(f64enc *f) {
 
     if (f->index == 64) {
         f64enc_set_length(f, 64 - 1);
-        return f64enc_deliver(f);
+        return f64enc_write(f);
     } else {
         f64enc_set_length(f, f->index - 1);
     }
@@ -120,7 +123,7 @@ enum f64enc_error f64enc_append_buf(f64enc *f, unsigned len, const u8 *bytes) {
         }
 
         ret = f64enc_attempt_delivery(f);
-        if (ret != F64ENC_ERR_SUCCESS) {
+        if (ret) {
             return ret;
         }
     }
