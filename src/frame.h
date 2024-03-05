@@ -7,22 +7,43 @@
 
 typedef uint8_t u8;
 
-#define BUFFER_SIZE 64
+enum frame_error {
+    FRAME_ERR_SUCCESS,
+    FRAME_ERR_NULL_FRAME_ARG,
+    FRAME_ERR_NULL_FRAME_DELIVERER,
+    FRAME_ERR_NULL_BUFFER_ARG,
+    FRAME_ERR_DELIVERY_FAILURE
+};
+
+// frame-delivery delegate:
+typedef struct {
+    void *ctx;
+    int (*deliver_frame)(void *ctx, unsigned len, const u8 *data);
+} FrameDeliverer;
 
 typedef struct {
-    u8 data[1+BUFFER_SIZE];
-    u8 index;
-    void (*deliver)(u8 len, const u8 *data);
+    // current frame including header byte at data[0]:
+    u8 data[64];
+
+    // index into data[] of next write:
+    unsigned index;
+
+    // delegate to invoke when delivering a frame:
+    FrameDeliverer deliverer;
 } Frame;
 
-bool frame_init(Frame *frame, void (*deliver)(u8 len, const u8 *data));
+enum frame_error frame_init(Frame *f, FrameDeliverer deliverer);
 
-void frame_deliver(Frame *frame);
+enum frame_error frame_reset(Frame *f);
 
-void frame_set_final(Frame *frame, bool isFinal);
+enum frame_error frame_deliver(Frame *f);
 
-void frame_append_u8(Frame *frame, u8 byte);
+enum frame_error frame_set_final(Frame *f, bool isFinal);
 
-void frame_append_buf(Frame *frame, unsigned len, const u8 *bytes);
+enum frame_error frame_set_delimiter(Frame *f, u8 delim);
+
+enum frame_error frame_append_u8(Frame *f, u8 byte);
+
+enum frame_error frame_append_buf(Frame *f, unsigned len, const u8 *bytes);
 
 #endif //REX_FRAME_H
