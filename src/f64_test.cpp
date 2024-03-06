@@ -40,6 +40,15 @@ extern "C" int reader_read(void *ctx, int len, unsigned char *dest) {
     return static_cast<reader*>(ctx)->read(len, dest);
 }
 
+extern "C" int reader_read1(void *ctx, int len, unsigned char *dest) {
+    // limit reads to 1 byte at a time:
+    if (len > 0) {
+        len = 1;
+    }
+
+    return static_cast<reader*>(ctx)->read(len, dest);
+}
+
 struct consumer {
     int data(int len, const u8 *src) {
         accum.insert(accum.end(), src, src+len);
@@ -135,6 +144,33 @@ TEST_CASE( "f64enc to f64dec", "end-to-end" ) {
         REQUIRE( f64dec_read(&d) == F64DEC_ERR_READ_NO_DATA );
 
         REQUIRE_THAT( consumer.accum, RangeEquals(std::vector<u8>{ 1, 0 }) );
+    }
+
+    SECTION( "2 byte frame - read1", "append_u8" ) {
+        f64enc e;
+        f64dec d;
+
+        std::vector<u8> framed;
+        reader reader(framed);
+        consumer consumer;
+
+        REQUIRE( f64enc_init(&e, {&framed, frame_write}) == F64ENC_ERR_SUCCESS );
+        // NOTE: only reading 1 byte per read() call:
+        REQUIRE( f64dec_init(&d, {&reader, reader_read1}, {&consumer,consumer_data,consumer_delimit,consumer_final}) == F64DEC_ERR_SUCCESS );
+
+        REQUIRE( f64enc_set_final(&e, true) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_append_u8(&e, 1) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_append_u8(&e, 2) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_write(&e) == F64ENC_ERR_SUCCESS );
+
+        REQUIRE( framed.size() == 3 );
+        REQUIRE_THAT( framed, RangeEquals(std::vector<u8>{ 0x82, 0x01, 0x02 }) );
+
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_READ_NO_DATA );
+
+        REQUIRE_THAT( consumer.accum, RangeEquals(std::vector<u8>{ 1, 2, 0 }) );
     }
 
     SECTION( "delimiter", "delimiter" ) {
