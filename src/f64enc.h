@@ -14,13 +14,13 @@ enum f64enc_error {
     F64ENC_ERR_NULL_BUFFER_ARG = -3,
     F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA = -4,
     F64ENC_ERR_ZERO_LENGTH = -5,
-    F64ENC_ERR_DELIVERY_FAILURE = -6
+    F64ENC_ERR_WRITE_FAILURE = -6
 };
 
 // frame-delivery delegate:
 typedef struct {
     void *ctx;
-    int (*write_frame)(void *ctx, unsigned len, const u8 *data);
+    int (*write_frame)(void *ctx, int len, const u8 *data);
 } f64enc_writer;
 
 typedef struct {

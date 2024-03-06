@@ -10,7 +10,7 @@ extern "C" {
 
 using Catch::Matchers::RangeEquals;
 
-static auto frame_write(void *ctx, unsigned len, const u8 *data) -> int {
+static auto frame_write(void *ctx, int len, const u8 *data) -> int {
     auto v = ((std::vector<u8> *)ctx);
     v->insert(v->end(), data, data + len);
     return F64ENC_ERR_SUCCESS;

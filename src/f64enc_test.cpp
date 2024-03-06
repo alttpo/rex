@@ -8,7 +8,7 @@ extern "C" {
 #include "f64enc.h"
 }
 
-static auto record_frame(void *ctx, unsigned len, const u8 *data) -> int {
+static auto record_frame(void *ctx, int len, const u8 *data) -> int {
     ((std::vector< std::vector<u8> > *)ctx)->emplace_back(data, data + len);
     return 0;
 }
