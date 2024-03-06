@@ -103,6 +103,13 @@ static enum f64enc_error f64enc_attempt_delivery(f64enc *f) {
 }
 
 enum f64enc_error f64enc_append_u8(f64enc *f, u8 byte) {
+    if (!f) {
+        return F64ENC_ERR_NULL_FRAME_ARG;
+    }
+    if (f->data[0] & 0x40) {
+        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
+    }
+
     f->data[f->index++] = byte;
     return f64enc_attempt_delivery(f);
 }
@@ -113,6 +120,9 @@ enum f64enc_error f64enc_append_buf(f64enc *f, unsigned len, const u8 *bytes) {
     }
     if (!bytes) {
         return F64ENC_ERR_NULL_BUFFER_ARG;
+    }
+    if (f->data[0] & 0x40) {
+        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
     }
 
     enum f64enc_error ret;
