@@ -44,9 +44,10 @@ enum f64enc_error f64enc_write(f64enc *f) {
     } else {
         // frame data:
         len = (f->data[0] & 63);
+        if (len == 0) {
+            return F64ENC_ERR_ZERO_LENGTH;
+        }
     }
-
-    assert(len < 64);
 
     // attempt write:
     int ret = f->writer.write_frame(f->writer.ctx, 1 + len, f->data);
@@ -59,23 +60,28 @@ enum f64enc_error f64enc_write(f64enc *f) {
     return F64ENC_ERR_SUCCESS;
 }
 
-enum f64enc_error f64enc_set_final(f64enc *f, bool isFinal) {
+enum f64enc_error f64enc_write_zero(f64enc *f) {
+    unsigned len;
+
     if (!f) {
         return F64ENC_ERR_NULL_FRAME_ARG;
     }
 
-    f->data[0] = ((u8)(isFinal & 1) << 7) | (f->data[0] & 0x7F);
-
-    return F64ENC_ERR_SUCCESS;
-}
-
-enum f64enc_error f64enc_set_delimiter(f64enc *f, u8 delim) {
-    if (!f) {
-        return F64ENC_ERR_NULL_FRAME_ARG;
+    if (f->data[0] & 0x40) {
+        // delimiter:
+        len = 0;
+    } else {
+        // frame data:
+        len = (f->data[0] & 63);
     }
 
-    // set delimiter bit; set delimiter value; maintain isFinal bit:
-    f->data[0] = (delim & 0x3F) | (0x40) | (f->data[0] & 0x80);
+    // attempt write:
+    int ret = f->writer.write_frame(f->writer.ctx, 1 + len, f->data);
+    if (ret) {
+        return ret;
+    }
+
+    f64enc_reset_internal(f);
 
     return F64ENC_ERR_SUCCESS;
 }
@@ -84,10 +90,10 @@ static void f64enc_set_length(f64enc *f, unsigned len) {
     assert(f);
     assert(len < 64);
 
-    f->data[0] = (f->data[0] & (0x80 | 0x40)) | (len & 0x3F);
+    f->data[0] = (f->data[0] & 0x80) | (len & 0x3F);
 }
 
-static enum f64enc_error f64enc_attempt_delivery(f64enc *f) {
+static enum f64enc_error f64enc_attempt_write(f64enc *f) {
     assert(f);
     assert(f->index >= 1);
     assert(f->index <= 64);
@@ -102,16 +108,38 @@ static enum f64enc_error f64enc_attempt_delivery(f64enc *f) {
     return F64ENC_ERR_SUCCESS;
 }
 
+enum f64enc_error f64enc_delimiter(f64enc *f, u8 delim) {
+    if (!f) {
+        return F64ENC_ERR_NULL_FRAME_ARG;
+    }
+    if (f->data[0] != 0) {
+        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
+    }
+
+    // set delimiter bit; set delimiter value:
+    f->data[0] = (delim & 0x3F) | (0x40);
+
+    return f64enc_write(f);
+}
+
+enum f64enc_error f64enc_set_final(f64enc *f, bool isFinal) {
+    if (!f) {
+        return F64ENC_ERR_NULL_FRAME_ARG;
+    }
+
+    f->data[0] = ((u8)(isFinal & 1) << 7) | (f->data[0] & 0x3F);
+
+    return F64ENC_ERR_SUCCESS;
+}
+
 enum f64enc_error f64enc_append_u8(f64enc *f, u8 byte) {
     if (!f) {
         return F64ENC_ERR_NULL_FRAME_ARG;
     }
-    if (f->data[0] & 0x40) {
-        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
-    }
 
     f->data[f->index++] = byte;
-    return f64enc_attempt_delivery(f);
+
+    return f64enc_attempt_write(f);
 }
 
 enum f64enc_error f64enc_append_buf(f64enc *f, unsigned len, const u8 *bytes) {
@@ -121,9 +149,6 @@ enum f64enc_error f64enc_append_buf(f64enc *f, unsigned len, const u8 *bytes) {
     if (!bytes) {
         return F64ENC_ERR_NULL_BUFFER_ARG;
     }
-    if (f->data[0] & 0x40) {
-        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
-    }
 
     enum f64enc_error ret;
 
@@ -132,7 +157,7 @@ enum f64enc_error f64enc_append_buf(f64enc *f, unsigned len, const u8 *bytes) {
             f->data[f->index++] = *bytes++;
         }
 
-        ret = f64enc_attempt_delivery(f);
+        ret = f64enc_attempt_write(f);
         if (ret) {
             return ret;
         }

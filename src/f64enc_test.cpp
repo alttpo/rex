@@ -14,6 +14,54 @@ static auto record_frame(void *ctx, unsigned len, const u8 *data) -> int {
 }
 
 TEST_CASE( "f64enc encodes", "f64enc" ) {
+    SECTION( "0 byte frame write" ) {
+        f64enc e;
+
+        std::vector< std::vector<u8> > written;
+        REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
+
+        REQUIRE( f64enc_write(&e) == F64ENC_ERR_ZERO_LENGTH );
+
+        REQUIRE( written.size() == 0 );
+    }
+
+    SECTION( "0 byte frame final write" ) {
+        f64enc e;
+
+        std::vector< std::vector<u8> > written;
+        REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
+
+        REQUIRE( f64enc_set_final(&e, true) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_write(&e) == F64ENC_ERR_ZERO_LENGTH );
+
+        REQUIRE( written.size() == 0 );
+    }
+
+    SECTION( "0 byte frame write_zero" ) {
+        f64enc e;
+
+        std::vector< std::vector<u8> > written;
+        REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
+
+        REQUIRE( f64enc_write_zero(&e) == F64ENC_ERR_SUCCESS );
+
+        REQUIRE( written.size() == 1 );
+        REQUIRE_THAT(written[0], Catch::Matchers::RangeEquals(std::vector<u8>{ 0x00 }));
+    }
+
+    SECTION( "0 byte frame write_zero" ) {
+        f64enc e;
+
+        std::vector< std::vector<u8> > written;
+        REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
+
+        REQUIRE( f64enc_set_final(&e, true) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_write_zero(&e) == F64ENC_ERR_SUCCESS );
+
+        REQUIRE( written.size() == 1 );
+        REQUIRE_THAT(written[0], Catch::Matchers::RangeEquals(std::vector<u8>{ 0x80 }));
+    }
+
     SECTION( "1 byte frame", "append_u8" ) {
         f64enc e;
 
@@ -100,8 +148,7 @@ TEST_CASE( "f64enc encodes", "f64enc" ) {
         std::vector< std::vector<u8> > written;
         REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
 
-        REQUIRE( f64enc_set_delimiter(&e, 1) == F64ENC_ERR_SUCCESS );
-        REQUIRE( f64enc_write(&e) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_delimiter(&e, 1) == F64ENC_ERR_SUCCESS );
 
         std::vector<u8> expected;
         expected.reserve(1);
@@ -117,8 +164,8 @@ TEST_CASE( "f64enc encodes", "f64enc" ) {
         std::vector< std::vector<u8> > written;
         REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
 
-        REQUIRE( f64enc_set_delimiter(&e, 1) == F64ENC_ERR_SUCCESS );
-        REQUIRE( f64enc_append_u8(&e, 1) == F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA );
+        REQUIRE( f64enc_append_u8(&e, 1) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_delimiter(&e, 1) == F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA );
     }
 
     SECTION( "append_buf - delimiter cannot have data", "delimiter" ) {
@@ -127,9 +174,9 @@ TEST_CASE( "f64enc encodes", "f64enc" ) {
         std::vector< std::vector<u8> > written;
         REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
 
-        REQUIRE( f64enc_set_delimiter(&e, 1) == F64ENC_ERR_SUCCESS );
         std::vector<u8> tmp;
         tmp.push_back(1);
-        REQUIRE( f64enc_append_buf(&e, tmp.size(), tmp.data()) == F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA );
+        REQUIRE( f64enc_append_buf(&e, tmp.size(), tmp.data()) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_delimiter(&e, 1) == F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA );
     }
 }

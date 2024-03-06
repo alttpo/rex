@@ -41,9 +41,6 @@ extern "C" int reader_read(void *ctx, int len, unsigned char *dest) {
 }
 
 struct consumer {
-    consumer() {
-    }
-
     int data(int len, const u8 *src) {
         accum.insert(accum.end(), src, src+len);
         return F64DEC_ERR_SUCCESS;
@@ -71,6 +68,51 @@ extern "C" int consumer_final(void *ctx) {
 }
 
 TEST_CASE( "f64enc to f64dec", "end-to-end" ) {
+    SECTION( "0 byte frame" ) {
+        f64enc e;
+        f64dec d;
+
+        std::vector<u8> framed;
+        reader reader(framed);
+        consumer consumer;
+
+        REQUIRE( f64enc_init(&e, {&framed, frame_write}) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64dec_init(&d, {&reader, reader_read}, {&consumer,consumer_data,consumer_delimit,consumer_final}) == F64DEC_ERR_SUCCESS );
+
+        REQUIRE( f64enc_write_zero(&e) == F64ENC_ERR_SUCCESS );
+
+        REQUIRE( framed.size() == 1 );
+        REQUIRE_THAT( framed, RangeEquals(std::vector<u8>{ 0x00 }) );
+
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_READ_NO_DATA );
+
+        REQUIRE_THAT( consumer.accum, RangeEquals(std::vector<u8>{ }) );
+    }
+
+    SECTION( "0 byte frame final" ) {
+        f64enc e;
+        f64dec d;
+
+        std::vector<u8> framed;
+        reader reader(framed);
+        consumer consumer;
+
+        REQUIRE( f64enc_init(&e, {&framed, frame_write}) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64dec_init(&d, {&reader, reader_read}, {&consumer,consumer_data,consumer_delimit,consumer_final}) == F64DEC_ERR_SUCCESS );
+
+        REQUIRE( f64enc_set_final(&e, true) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_write_zero(&e) == F64ENC_ERR_SUCCESS );
+
+        REQUIRE( framed.size() == 1 );
+        REQUIRE_THAT( framed, RangeEquals(std::vector<u8>{ 0x80 }) );
+
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_READ_NO_DATA );
+
+        REQUIRE_THAT( consumer.accum, RangeEquals(std::vector<u8>{ 0 }) );
+    }
+
     SECTION( "1 byte frame", "append_u8" ) {
         f64enc e;
         f64dec d;
@@ -91,6 +133,7 @@ TEST_CASE( "f64enc to f64dec", "end-to-end" ) {
 
         REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
         REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_READ_NO_DATA );
 
         REQUIRE_THAT( consumer.accum, RangeEquals(std::vector<u8>{ 1, 0 }) );
     }
@@ -106,8 +149,7 @@ TEST_CASE( "f64enc to f64dec", "end-to-end" ) {
         REQUIRE( f64enc_init(&e, {&framed, frame_write}) == F64ENC_ERR_SUCCESS );
         REQUIRE( f64dec_init(&d, {&reader, reader_read}, {&consumer,consumer_data,consumer_delimit,consumer_final}) == F64DEC_ERR_SUCCESS );
 
-        REQUIRE( f64enc_set_delimiter(&e, 0x3F) == F64ENC_ERR_SUCCESS );
-        REQUIRE( f64enc_write(&e) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_delimiter(&e, 0x3F) == F64ENC_ERR_SUCCESS );
 
         REQUIRE( framed.size() == 1 );
         REQUIRE_THAT( framed, RangeEquals(std::vector<u8>{ 0x7F }) );
@@ -129,16 +171,51 @@ TEST_CASE( "f64enc to f64dec", "end-to-end" ) {
         REQUIRE( f64enc_init(&e, {&framed, frame_write}) == F64ENC_ERR_SUCCESS );
         REQUIRE( f64dec_init(&d, {&reader, reader_read}, {&consumer,consumer_data,consumer_delimit,consumer_final}) == F64DEC_ERR_SUCCESS );
 
+        REQUIRE( f64enc_delimiter(&e, 0x3F) == F64ENC_ERR_SUCCESS );
+
         REQUIRE( f64enc_set_final(&e, true) == F64ENC_ERR_SUCCESS );
-        REQUIRE( f64enc_set_delimiter(&e, 0x3F) == F64ENC_ERR_SUCCESS );
-        REQUIRE( f64enc_write(&e) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_write_zero(&e) == F64ENC_ERR_SUCCESS );
 
-        REQUIRE( framed.size() == 1 );
-        REQUIRE_THAT( framed, RangeEquals(std::vector<u8>{ 0xFF }) );
+        REQUIRE( framed.size() == 2 );
+        REQUIRE_THAT( framed, RangeEquals(std::vector<u8>{ 0x7F, 0x80 }) );
 
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
         REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
         REQUIRE( f64dec_read(&d) == F64DEC_ERR_READ_NO_DATA );
 
         REQUIRE_THAT( consumer.accum, RangeEquals(std::vector<u8>{ 0x3F, 0 }) );
+    }
+
+    SECTION( "msg delimiter msg", "delimiter" ) {
+        f64enc e;
+        f64dec d;
+
+        std::vector<u8> framed;
+        reader reader(framed);
+        consumer consumer;
+
+        REQUIRE( f64enc_init(&e, {&framed, frame_write}) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64dec_init(&d, {&reader, reader_read}, {&consumer,consumer_data,consumer_delimit,consumer_final}) == F64DEC_ERR_SUCCESS );
+
+        REQUIRE( f64enc_append_u8(&e, 1) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_write(&e) == F64ENC_ERR_SUCCESS );
+
+        REQUIRE( f64enc_delimiter(&e, 0x3F) == F64ENC_ERR_SUCCESS );
+
+        REQUIRE( f64enc_set_final(&e, true) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_append_u8(&e, 2) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_write(&e) == F64ENC_ERR_SUCCESS );
+
+        REQUIRE( framed.size() == 5 );
+        REQUIRE_THAT( framed, RangeEquals(std::vector<u8>{ 0x01, 0x01, 0x7F, 0x81, 0x02 }) );
+
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
+        REQUIRE( f64dec_read(&d) == F64DEC_ERR_READ_NO_DATA );
+
+        REQUIRE_THAT( consumer.accum, RangeEquals(std::vector<u8>{ 0x01, 0x3F, 0x02, 0 }) );
     }
 }
