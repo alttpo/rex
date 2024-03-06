@@ -51,13 +51,13 @@ enum f64dec_error f64dec_read(f64dec *f) {
     if (n < 0) {
         return n;
     }
+    // no data:
+    if (n == 0) {
+        return F64DEC_ERR_READ_NO_DATA;
+    }
+    // too much?
     if (n > expect_len) {
         return F64DEC_ERR_READ_TOO_MUCH;
-    }
-
-    // no data available:
-    if (n == 0) {
-        return F64DEC_ERR_SUCCESS;
     }
 
     assert(n + f->index < 64);
