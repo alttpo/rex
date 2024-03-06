@@ -116,7 +116,7 @@ enum f64enc_error f64enc_delimiter(f64enc *f, u8 delim) {
         return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
     }
 
-    // set delimiter bit; set delimiter value:
+    // set delimiter bit; set delimiter value; delimiter cannot be final:
     f->data[0] = (delim & 0x3F) | (0x40);
 
     return f64enc_write(f);

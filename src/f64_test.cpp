@@ -132,7 +132,6 @@ TEST_CASE( "f64enc to f64dec", "end-to-end" ) {
         REQUIRE_THAT( framed, RangeEquals(std::vector<u8>{ 0x81, 0x01 }) );
 
         REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
-        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
         REQUIRE( f64dec_read(&d) == F64DEC_ERR_READ_NO_DATA );
 
         REQUIRE_THAT( consumer.accum, RangeEquals(std::vector<u8>{ 1, 0 }) );
@@ -209,8 +208,6 @@ TEST_CASE( "f64enc to f64dec", "end-to-end" ) {
         REQUIRE( framed.size() == 5 );
         REQUIRE_THAT( framed, RangeEquals(std::vector<u8>{ 0x01, 0x01, 0x7F, 0x81, 0x02 }) );
 
-        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
-        REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
         REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
         REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
         REQUIRE( f64dec_read(&d) == F64DEC_ERR_SUCCESS );
