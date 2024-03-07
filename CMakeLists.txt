@@ -12,6 +12,7 @@ add_executable(f64_test
         src/f64dec.h
         src/f64dec.c
         src/f64enc_test.cpp
+        src/f64dec_test.cpp
         src/f64_test.cpp
 )
 target_link_libraries(f64_test PRIVATE Catch2::Catch2WithMain)

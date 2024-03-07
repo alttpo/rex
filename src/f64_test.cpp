@@ -10,12 +10,6 @@ extern "C" {
 
 using Catch::Matchers::RangeEquals;
 
-static auto frame_write(void *ctx, int len, const u8 *data) -> int {
-    auto v = ((std::vector<u8> *)ctx);
-    v->insert(v->end(), data, data + len);
-    return F64ENC_ERR_SUCCESS;
-}
-
 struct reader {
     explicit reader(std::vector<u8> &buf) : m_buf(buf) {}
 
@@ -36,19 +30,6 @@ struct reader {
     std::vector<u8> &m_buf;
 };
 
-extern "C" int reader_read(void *ctx, int len, unsigned char *dest) {
-    return static_cast<reader*>(ctx)->read(len, dest);
-}
-
-extern "C" int reader_read1(void *ctx, int len, unsigned char *dest) {
-    // limit reads to 1 byte at a time:
-    if (len > 0) {
-        len = 1;
-    }
-
-    return static_cast<reader*>(ctx)->read(len, dest);
-}
-
 struct consumer {
     int data(int len, const u8 *src) {
         accum.insert(accum.end(), src, src+len);
@@ -66,14 +47,37 @@ struct consumer {
     std::vector<u8> accum;
 };
 
-extern "C" int consumer_data(void *ctx, int len, const u8 *src) {
-    return static_cast<consumer*>(ctx)->data(len, src);
+extern "C" {
+
+static auto frame_write(void *ctx, int len, const u8 *data) -> int {
+    auto v = ((std::vector<u8> *)ctx);
+    v->insert(v->end(), data, data + len);
+    return F64ENC_ERR_SUCCESS;
 }
-extern "C" int consumer_delimit(void *ctx, u8 delim) {
-    return static_cast<consumer*>(ctx)->delimit(delim);
+
+static int reader_read(void *ctx, int len, unsigned char *dest) {
+    return static_cast<reader*>(ctx)->read(len, dest);
 }
-extern "C" int consumer_final(void *ctx) {
-    return static_cast<consumer*>(ctx)->final();
+
+static int reader_read1(void *ctx, int len, unsigned char *dest) {
+    // limit reads to 1 byte at a time:
+    if (len > 0) {
+        len = 1;
+    }
+
+    return static_cast<reader*>(ctx)->read(len, dest);
+}
+
+static int consumer_data(void *ctx, int len, const u8 *src) {
+    return static_cast<consumer *>(ctx)->data(len, src);
+}
+static int consumer_delimit(void *ctx, u8 delim) {
+    return static_cast<consumer *>(ctx)->delimit(delim);
+}
+static int consumer_final(void *ctx) {
+    return static_cast<consumer *>(ctx)->final();
+}
+
 }
 
 TEST_CASE( "f64enc to f64dec", "end-to-end" ) {
