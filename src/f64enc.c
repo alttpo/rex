@@ -1,7 +1,7 @@
 #include <assert.h>
 #include "f64enc.h"
 
-void f64enc_reset_internal(f64enc *f) {
+static void f64enc_reset_internal(f64enc *f) {
     assert(f);
     f->data[0] = 0;
     f->index = 1;
@@ -31,22 +31,46 @@ enum f64enc_error f64enc_reset(f64enc *f) {
     return F64ENC_ERR_SUCCESS;
 }
 
+enum f64enc_error f64enc_delimiter(f64enc *f, u8 delim) {
+    if (!f) {
+        return F64ENC_ERR_NULL_FRAME_ARG;
+    }
+    if (f->data[0] != 0) {
+        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
+    }
+    if (delim & 0xC0) {
+        // delimiter must be in 0..63 range:
+        return F64ENC_ERR_DELIMITER_MUST_BE_6_BIT;
+    }
+
+    // set delimiter bit; set delimiter value; delimiter cannot be final:
+    f->data[0] = (delim & 0x3F) | (0x40);
+
+    // attempt write:
+    int ret = f->writer.write_frame(f->writer.ctx, 1, f->data);
+    if (ret) {
+        return ret;
+    }
+
+    f64enc_reset_internal(f);
+
+    return F64ENC_ERR_SUCCESS;
+}
+
 enum f64enc_error f64enc_write(f64enc *f) {
-    unsigned len;
+    int len;
 
     if (!f) {
         return F64ENC_ERR_NULL_FRAME_ARG;
     }
-
     if (f->data[0] & 0x40) {
-        // delimiter:
-        len = 0;
-    } else {
-        // frame data:
-        len = (f->data[0] & 63);
-        if (len == 0) {
-            return F64ENC_ERR_ZERO_LENGTH;
-        }
+        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
+    }
+
+    // frame data:
+    len = (f->data[0] & 63);
+    if (len == 0) {
+        return F64ENC_ERR_ZERO_LENGTH;
     }
 
     // attempt write:
@@ -61,19 +85,17 @@ enum f64enc_error f64enc_write(f64enc *f) {
 }
 
 enum f64enc_error f64enc_write_zero(f64enc *f) {
-    unsigned len;
+    int len;
 
     if (!f) {
         return F64ENC_ERR_NULL_FRAME_ARG;
     }
-
     if (f->data[0] & 0x40) {
-        // delimiter:
-        len = 0;
-    } else {
-        // frame data:
-        len = (f->data[0] & 63);
+        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
     }
+
+    // frame data:
+    len = (f->data[0] & 63);
 
     // attempt write:
     int ret = f->writer.write_frame(f->writer.ctx, 1 + len, f->data);
@@ -106,20 +128,6 @@ static enum f64enc_error f64enc_attempt_write(f64enc *f) {
     }
 
     return F64ENC_ERR_SUCCESS;
-}
-
-enum f64enc_error f64enc_delimiter(f64enc *f, u8 delim) {
-    if (!f) {
-        return F64ENC_ERR_NULL_FRAME_ARG;
-    }
-    if (f->data[0] != 0) {
-        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
-    }
-
-    // set delimiter bit; set delimiter value; delimiter cannot be final:
-    f->data[0] = (delim & 0x3F) | (0x40);
-
-    return f64enc_write(f);
 }
 
 enum f64enc_error f64enc_set_final(f64enc *f, bool isFinal) {
