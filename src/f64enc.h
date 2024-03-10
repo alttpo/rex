@@ -39,7 +39,7 @@ enum f64enc_error f64enc_init(f64enc *f, f64enc_writer writer);
 
 enum f64enc_error f64enc_reset(f64enc *f);
 
-enum f64enc_error f64enc_delimiter(f64enc *f, u8 delim);
+enum f64enc_error f64enc_write_delimiter(f64enc *f, u8 delim);
 
 enum f64enc_error f64enc_set_final(f64enc *f, bool isFinal);
 

@@ -108,4 +108,53 @@ TEST_CASE( "f64dec" ) {
 
         REQUIRE_THAT(consumer.accum, RangeEquals(std::vector<u8>{}));
     }
+
+    SECTION("delimiter") {
+        f64enc e;
+        f64dec d;
+
+        std::vector<u8> framed;
+        reader reader(framed);
+        consumer consumer;
+
+        REQUIRE(f64enc_init(&e, {&framed, frame_write}) == F64ENC_ERR_SUCCESS);
+        REQUIRE(f64dec_init(&d, {&reader, reader_read}, {&consumer, consumer_data, consumer_delimit, consumer_final}) == F64DEC_ERR_SUCCESS);
+
+        // delimiter, delim=1:
+        framed.push_back(0x41);
+
+        REQUIRE(framed.size() == 1);
+
+        REQUIRE(f64dec_read(&d) == F64DEC_ERR_SUCCESS);
+        REQUIRE(f64dec_read(&d) == F64DEC_ERR_READ_NO_DATA);
+
+        std::vector<u8> expected;
+        expected.push_back(1);
+        REQUIRE_THAT(consumer.accum, RangeEquals(expected));
+    }
+
+    SECTION("delimiter with final bit") {
+        f64enc e;
+        f64dec d;
+
+        std::vector<u8> framed;
+        reader reader(framed);
+        consumer consumer;
+
+        REQUIRE(f64enc_init(&e, {&framed, frame_write}) == F64ENC_ERR_SUCCESS);
+        REQUIRE(f64dec_init(&d, {&reader, reader_read}, {&consumer, consumer_data, consumer_delimit, consumer_final}) == F64DEC_ERR_SUCCESS);
+
+        // delimiter, final, delim=1:
+        framed.push_back(0xC1);
+
+        REQUIRE(framed.size() == 1);
+
+        REQUIRE(f64dec_read(&d) == F64DEC_ERR_SUCCESS);
+        REQUIRE(f64dec_read(&d) == F64DEC_ERR_READ_NO_DATA);
+
+        std::vector<u8> expected;
+        expected.push_back(1);
+        expected.push_back(0);
+        REQUIRE_THAT(consumer.accum, RangeEquals(expected));
+    }
 }

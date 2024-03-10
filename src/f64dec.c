@@ -32,13 +32,15 @@ enum f64dec_error f64dec_reset(f64dec *f) {
 }
 
 enum f64dec_error f64dec_read(f64dec *f) {
+    int ret;
+    int n;
     int expect_len;
     int frame_len;
     u8 header;
 
     if (f->index == 0) {
         // read the header byte:
-        int n = f->reader.read(f->reader.ctx, 1, &f->data[0]);
+        n = f->reader.read(f->reader.ctx, 1, &f->data[0]);
         if (n < 0) {
             return n;
         }
@@ -60,9 +62,17 @@ enum f64dec_error f64dec_read(f64dec *f) {
             // handle delimiter:
             u8 delimiter = frame_len;
 
-            int ret = f->consumer.delimit(f->consumer.ctx, delimiter);
+            ret = f->consumer.delimit(f->consumer.ctx, delimiter);
             if (ret) {
                 return ret;
+            }
+
+            if (header & 0x80) {
+                // final frame:
+                ret = f->consumer.final(f->consumer.ctx);
+                if (ret) {
+                    return ret;
+                }
             }
 
             // reset for next frame:
@@ -73,7 +83,7 @@ enum f64dec_error f64dec_read(f64dec *f) {
         if (frame_len == 0) {
             if (header & 0x80) {
                 // final frame:
-                int ret = f->consumer.final(f->consumer.ctx);
+                ret = f->consumer.final(f->consumer.ctx);
                 if (ret) {
                     return ret;
                 }
@@ -93,43 +103,42 @@ enum f64dec_error f64dec_read(f64dec *f) {
     expect_len = frame_len - (f->index - 1);
 
     assert(expect_len > 0);
-    {
-        int n = f->reader.read(f->reader.ctx, expect_len, &f->data[f->index]);
-        if (n < 0) {
-            return n;
-        }
-        // no data:
-        if (n == 0) {
-            return F64DEC_ERR_READ_NO_DATA;
-        }
-        // too much?
-        if (n > expect_len) {
-            return F64DEC_ERR_READ_TOO_MUCH;
+
+    n = f->reader.read(f->reader.ctx, expect_len, &f->data[f->index]);
+    if (n < 0) {
+        return n;
+    }
+    // no data:
+    if (n == 0) {
+        return F64DEC_ERR_READ_NO_DATA;
+    }
+    // too much?
+    if (n > expect_len) {
+        return F64DEC_ERR_READ_TOO_MUCH;
+    }
+
+    assert(n + f->index < 64);
+
+    f->index += n;
+
+    // data available:
+    if ((f->index - 1) == frame_len) {
+        // all data received:
+        ret = f->consumer.data(f->consumer.ctx, frame_len, &f->data[1]);
+        if (ret) {
+            return ret;
         }
 
-        assert(n + f->index < 64);
-
-        f->index += n;
-
-        // data available:
-        if ((f->index - 1) == frame_len) {
-            // all data received:
-            int ret = f->consumer.data(f->consumer.ctx, frame_len, &f->data[1]);
+        if (header & 0x80) {
+            // final frame:
+            ret = f->consumer.final(f->consumer.ctx);
             if (ret) {
                 return ret;
             }
-
-            if (header & 0x80) {
-                // final frame:
-                ret = f->consumer.final(f->consumer.ctx);
-                if (ret) {
-                    return ret;
-                }
-            }
-
-            // reset for next frame:
-            return f64dec_reset(f);
         }
+
+        // reset for next frame:
+        return f64dec_reset(f);
     }
 
     return F64DEC_ERR_SUCCESS;
