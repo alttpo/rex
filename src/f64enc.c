@@ -31,47 +31,15 @@ enum f64enc_error f64enc_reset(f64enc *f) {
     return F64ENC_ERR_SUCCESS;
 }
 
-enum f64enc_error f64enc_write_delimiter(f64enc *f, u8 delim) {
-    if (!f) {
-        return F64ENC_ERR_NULL_FRAME_ARG;
-    }
-    if ((f->data[0] & 0x7F) != 0) {
-        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
-    }
-    if (f->index != 1) {
-        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
-    }
-    if (delim & 0xC0) {
-        // delimiter must be in 0..63 range:
-        return F64ENC_ERR_DELIMITER_MUST_BE_6_BIT;
-    }
-
-    // set delimiter bit; set delimiter value; delimiter may be final:
-    f->data[0] = (delim & 0x3F) | (0x40) | (f->data[0] & 0x80);
-
-    // attempt write:
-    int ret = f->writer.write_frame(f->writer.ctx, 1, f->data);
-    if (ret) {
-        return ret;
-    }
-
-    f64enc_reset_internal(f);
-
-    return F64ENC_ERR_SUCCESS;
-}
-
 enum f64enc_error f64enc_write(f64enc *f) {
     int len;
 
     if (!f) {
         return F64ENC_ERR_NULL_FRAME_ARG;
     }
-    if (f->data[0] & 0x40) {
-        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
-    }
 
     // frame data:
-    len = (f->data[0] & 63);
+    len = (f->data[0] & 0x3F);
     if (len == 0) {
         return F64ENC_ERR_ZERO_LENGTH;
     }
@@ -93,12 +61,9 @@ enum f64enc_error f64enc_write_zero(f64enc *f) {
     if (!f) {
         return F64ENC_ERR_NULL_FRAME_ARG;
     }
-    if (f->data[0] & 0x40) {
-        return F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA;
-    }
 
     // frame data:
-    len = (f->data[0] & 63);
+    len = (f->data[0] & 0x3F);
 
     // attempt write:
     int ret = f->writer.write_frame(f->writer.ctx, 1 + len, f->data);
@@ -115,7 +80,7 @@ static void f64enc_set_length(f64enc *f, unsigned len) {
     assert(f);
     assert(len < 64);
 
-    f->data[0] = (f->data[0] & 0x80) | (len & 0x3F);
+    f->data[0] = (f->data[0] & 0xC0) | (len & 0x3F);
 }
 
 static enum f64enc_error f64enc_attempt_write(f64enc *f) {
@@ -138,7 +103,19 @@ enum f64enc_error f64enc_set_final(f64enc *f, bool isFinal) {
         return F64ENC_ERR_NULL_FRAME_ARG;
     }
 
-    f->data[0] = ((u8)(isFinal & 1) << 7) | (f->data[0] & 0x7F);
+    // set final bit:
+    f->data[0] = (f->data[0] & 0x7F) | ((u8)(isFinal & 1) << 7);
+
+    return F64ENC_ERR_SUCCESS;
+}
+
+enum f64enc_error f64enc_set_delimited(f64enc *f, bool isDelimited) {
+    if (!f) {
+        return F64ENC_ERR_NULL_FRAME_ARG;
+    }
+
+    // set delimited bit:
+    f->data[0] = (f->data[0] & 0xBF) | ((u8)(isDelimited & 1) << 6);
 
     return F64ENC_ERR_SUCCESS;
 }

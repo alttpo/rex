@@ -12,10 +12,8 @@ enum f64enc_error {
     F64ENC_ERR_NULL_FRAME_ARG = -1,
     F64ENC_ERR_NULL_FRAME_WRITER = -2,
     F64ENC_ERR_NULL_BUFFER_ARG = -3,
-    F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA = -4,
-    F64ENC_ERR_DELIMITER_MUST_BE_6_BIT = -5,
-    F64ENC_ERR_ZERO_LENGTH = -6,
-    F64ENC_ERR_WRITE_FAILURE = -7
+    F64ENC_ERR_ZERO_LENGTH = -4,
+    F64ENC_ERR_WRITE_FAILURE = -5
 };
 
 // frame-delivery delegate:
@@ -39,7 +37,7 @@ enum f64enc_error f64enc_init(f64enc *f, f64enc_writer writer);
 
 enum f64enc_error f64enc_reset(f64enc *f);
 
-enum f64enc_error f64enc_write_delimiter(f64enc *f, u8 delim);
+enum f64enc_error f64enc_set_delimited(f64enc *f, bool isDelimited);
 
 enum f64enc_error f64enc_set_final(f64enc *f, bool isFinal);
 

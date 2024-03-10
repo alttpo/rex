@@ -148,71 +148,12 @@ TEST_CASE( "f64enc encodes", "f64enc" ) {
         std::vector< std::vector<u8> > written;
         REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
 
-        REQUIRE( f64enc_write_delimiter(&e, 1) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_set_delimited(&e, true) == F64ENC_ERR_SUCCESS );
+        REQUIRE( f64enc_write_zero(&e) == F64ENC_ERR_SUCCESS );
 
         std::vector<u8> expected;
         expected.reserve(1);
-        expected.push_back(0x41);
-        REQUIRE( expected.size() == 1 );
-        REQUIRE( written.size() == 1 );
-        REQUIRE_THAT(written[0], Catch::Matchers::RangeEquals(expected));
-    }
-
-    SECTION( "delimiter cannot be above 63", "delimiter" ) {
-        f64enc e;
-
-        std::vector< std::vector<u8> > written;
-        REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
-
-        for (int i = 64; i < 256; i++) {
-            REQUIRE( f64enc_write_delimiter(&e, i) == F64ENC_ERR_DELIMITER_MUST_BE_6_BIT );
-        }
-    }
-
-    SECTION( "delimiter cannot have data", "delimiter" ) {
-        f64enc e;
-
-        std::vector< std::vector<u8> > written;
-        REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
-
-        REQUIRE( f64enc_append_u8(&e, 1) == F64ENC_ERR_SUCCESS );
-        REQUIRE( f64enc_write_delimiter(&e, 1) == F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA );
-    }
-
-    SECTION( "append_u8 - delimiter cannot have data", "delimiter" ) {
-        f64enc e;
-
-        std::vector< std::vector<u8> > written;
-        REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
-
-        REQUIRE( f64enc_append_u8(&e, 1) == F64ENC_ERR_SUCCESS );
-        REQUIRE( f64enc_write_delimiter(&e, 1) == F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA );
-    }
-
-    SECTION( "append_buf - delimiter cannot have data", "delimiter" ) {
-        f64enc e;
-
-        std::vector< std::vector<u8> > written;
-        REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
-
-        std::vector<u8> tmp;
-        tmp.push_back(1);
-        REQUIRE( f64enc_append_buf(&e, tmp.size(), tmp.data()) == F64ENC_ERR_SUCCESS );
-        REQUIRE( f64enc_write_delimiter(&e, 1) == F64ENC_ERR_DELIMITER_CANNOT_HAVE_DATA );
-    }
-
-    SECTION( "delimiter can have final bit set", "delimiter" ) {
-        f64enc e;
-
-        std::vector< std::vector<u8> > written;
-        REQUIRE( f64enc_init(&e,{&written,record_frame}) == F64ENC_ERR_SUCCESS );
-
-        REQUIRE( f64enc_set_final(&e, true) == F64ENC_ERR_SUCCESS );
-        REQUIRE( f64enc_write_delimiter(&e, 1) == F64ENC_ERR_SUCCESS );
-
-        std::vector<u8> expected;
-        expected.reserve(1);
-        expected.push_back(0xC1);
+        expected.push_back(0x40);
         REQUIRE( expected.size() == 1 );
         REQUIRE( written.size() == 1 );
         REQUIRE_THAT(written[0], Catch::Matchers::RangeEquals(expected));

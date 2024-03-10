@@ -102,13 +102,13 @@ reserved opcodes for future extension:
 message data (after the header) is framed with the following repeatable structure:
 
     frame: {
-        u8   header;        // [fessssss]; f=final, e=64-byte frame, s=size of data
-        u8   data[size];    // data for frame, 0..64 bytes
+        u8   header;        // [fdssssss]; f=final, d=delimited, s=size of data
+        u8   data[size];    // data for frame, 0..63 bytes
     }
 
     if f = 1 then this frame terminates the current message
-    if e = 0 then s is interpreted as the data length from 0..63
-    if e = 1 then this frame has a 64-byte data length, s is ignored
+    if d = 1 then this message part is delimited from the previous message part
+
     zero-byte frames are allowed to make it easier to finalize a message
 
     framing helps avoid buffering large messages in memory where RAM is at a premium like in embedded systems

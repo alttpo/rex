@@ -55,28 +55,15 @@ enum f64dec_error f64dec_read(f64dec *f) {
 
         f->index = 1;
 
-        // handle header-only frames:
+        // handle header:
         header = f->data[0];
         frame_len = (header & 0x3F);
         if (header & 0x40) {
             // handle delimiter:
-            u8 delimiter = frame_len;
-
-            ret = f->consumer.delimit(f->consumer.ctx, delimiter);
+            ret = f->consumer.delimit(f->consumer.ctx);
             if (ret) {
                 return ret;
             }
-
-            if (header & 0x80) {
-                // final frame:
-                ret = f->consumer.final(f->consumer.ctx);
-                if (ret) {
-                    return ret;
-                }
-            }
-
-            // reset for next frame:
-            return f64dec_reset(f);
         }
 
         // handle zero-byte frame:
@@ -99,7 +86,6 @@ enum f64dec_error f64dec_read(f64dec *f) {
     }
 
     // read the remaining frame length:
-    assert((header & 0x40) == 0);
     expect_len = frame_len - (f->index - 1);
 
     assert(expect_len > 0);

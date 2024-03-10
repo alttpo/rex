@@ -30,7 +30,7 @@ typedef struct {
 typedef struct {
     void *ctx;
     int (*data)(void *ctx, int len, const u8 *src);
-    int (*delimit)(void *ctx, u8 delim);
+    int (*delimit)(void *ctx);
     int (*final)(void *ctx);
 } f64dec_consumer;
 

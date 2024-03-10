@@ -35,8 +35,8 @@ struct consumer {
         accum.insert(accum.end(), src, src+len);
         return F64DEC_ERR_SUCCESS;
     }
-    int delimit(u8 delim) {
-        accum.push_back(delim);
+    int delimit() {
+        accum.push_back(0);
         return F64DEC_ERR_SUCCESS;
     }
     int final() {
@@ -71,8 +71,8 @@ static int reader_read1(void *ctx, int len, unsigned char *dest) {
 static int consumer_data(void *ctx, int len, const u8 *src) {
     return static_cast<consumer *>(ctx)->data(len, src);
 }
-static int consumer_delimit(void *ctx, u8 delim) {
-    return static_cast<consumer *>(ctx)->delimit(delim);
+static int consumer_delimit(void *ctx) {
+    return static_cast<consumer *>(ctx)->delimit();
 }
 static int consumer_final(void *ctx) {
     return static_cast<consumer *>(ctx)->final();
@@ -120,8 +120,8 @@ TEST_CASE( "f64dec" ) {
         REQUIRE(f64enc_init(&e, {&framed, frame_write}) == F64ENC_ERR_SUCCESS);
         REQUIRE(f64dec_init(&d, {&reader, reader_read}, {&consumer, consumer_data, consumer_delimit, consumer_final}) == F64DEC_ERR_SUCCESS);
 
-        // delimiter, delim=1:
-        framed.push_back(0x41);
+        // delimiter:
+        framed.push_back(0x40);
 
         REQUIRE(framed.size() == 1);
 
@@ -129,7 +129,7 @@ TEST_CASE( "f64dec" ) {
         REQUIRE(f64dec_read(&d) == F64DEC_ERR_READ_NO_DATA);
 
         std::vector<u8> expected;
-        expected.push_back(1);
+        expected.push_back(0);
         REQUIRE_THAT(consumer.accum, RangeEquals(expected));
     }
 
@@ -144,8 +144,8 @@ TEST_CASE( "f64dec" ) {
         REQUIRE(f64enc_init(&e, {&framed, frame_write}) == F64ENC_ERR_SUCCESS);
         REQUIRE(f64dec_init(&d, {&reader, reader_read}, {&consumer, consumer_data, consumer_delimit, consumer_final}) == F64DEC_ERR_SUCCESS);
 
-        // delimiter, final, delim=1:
-        framed.push_back(0xC1);
+        // delimiter, final:
+        framed.push_back(0xC0);
 
         REQUIRE(framed.size() == 1);
 
@@ -153,7 +153,7 @@ TEST_CASE( "f64dec" ) {
         REQUIRE(f64dec_read(&d) == F64DEC_ERR_READ_NO_DATA);
 
         std::vector<u8> expected;
-        expected.push_back(1);
+        expected.push_back(0);
         expected.push_back(0);
         REQUIRE_THAT(consumer.accum, RangeEquals(expected));
     }
