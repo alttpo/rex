@@ -5,6 +5,8 @@ set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 14)
 
 add_subdirectory(lib/Catch2)
+include(CTest)
+include(Catch)
 
 add_executable(f64_test
         src/f64enc.h
@@ -16,7 +18,4 @@ add_executable(f64_test
         src/f64_test.cpp
 )
 target_link_libraries(f64_test PRIVATE Catch2::Catch2WithMain)
-
-include(CTest)
-include(Catch)
 catch_discover_tests(f64_test)
