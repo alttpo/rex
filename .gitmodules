@@ -1,0 +1,8 @@
+[submodule "lib/flatbuffers"]
+	path = lib/flatbuffers
+	url = git@github.com:google/flatbuffers.git
+	branch = tags/v24.3.25
+[submodule "lib/flatcc"]
+	path = lib/flatcc
+	url = git@github.com:dvidelabs/flatcc.git
+	branch = tags/v0.6.1

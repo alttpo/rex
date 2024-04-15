@@ -1,0 +1,135 @@
+namespace rex;
+
+enum ChipID : uint16 {
+    SNES_WRAM = 0x0000,
+    SNES_VRAM,
+    SNES_CGRAM,
+    SNES_OAM,
+    SNES_APURAM,
+
+    SNES_CART_ROM = 0x0020,
+    SNES_CART_SRAM,
+    SNES_CART_SA1_IRAM,
+    SNES_CART_SA1_BWRAM,
+
+    SNES_FXPAK_NMI_EXE = 0x0040,
+}
+
+enum Comparison : uint8 {
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual
+}
+
+enum ErrorCode : uint8 {
+    TimedOut = 0xFE,
+    Success = 0,
+    UnknownChip,
+    ChipNotReadable,
+    ChipNotWritable,
+    ChipAddressOutOfRange,
+    PrgmInvalid,
+}
+
+///////////////////////////////////
+
+table EnumerateChipsRequest {}
+
+table Chip {
+    chip_id: ChipID;
+    size: uint32;
+    flags: uint8;
+    name: string;
+}
+
+table EnumerateChipsResponse {
+    chips: [Chip];
+}
+
+///////////////////////////////////
+
+table WriteMemory {
+    chip_id: ChipID;
+    chip_addr: uint32;
+    input_offset: uint16;
+    // [0, 255] range maps to [1, 256]
+    input_size_minus_1: uint8;
+}
+
+table ReadMemory {
+    chip_id: ChipID;
+    chip_addr: uint32;
+    output_offset: uint16;
+    // [0, 255] range maps to [1, 256]
+    output_size_minus_1: uint8;
+}
+
+table SetTimeout {
+    clock_cycles: uint32;
+}
+table WaitUntil {
+
+}
+table WaitWhileZero {
+
+}
+
+union ProgramInstruction {
+    WriteMemory,
+    ReadMemory,
+    SetTimeout,
+    WaitUntil,
+    WaitWhileZero
+}
+
+table EnterProgramRequest {
+    instructions: [ProgramInstruction];
+}
+
+table EnterProgramResponse {}
+
+///////////////////////////////////
+
+table ExecuteProgramRequest {
+    input_data: [ubyte];
+}
+
+table ExecuteProgramResponse {
+    output_data: [ubyte];
+}
+
+///////////////////////////////////
+
+union Request {
+    EnumerateChipsRequest,
+    EnterProgramRequest,
+    ExecuteProgramRequest,
+}
+
+union Response {
+    EnumerateChipsResponse,
+    EnterProgramResponse,
+    ExecuteProgramResponse,    
+}
+
+table RequestTable {
+    request: Request;
+}
+
+table ResponseTable {
+    response: Response;
+}
+
+union RequestOrResponse {
+    RequestTable,
+    ResponseTable
+}
+
+table Message {
+    message: RequestOrResponse;
+}
+
+root_type Message;
