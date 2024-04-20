@@ -54,7 +54,6 @@ table EnumerateChipsResponse {
 table WriteMemory {
     chip_id: ChipID;
     chip_addr: uint32;
-    input_offset: uint16;
     // [0, 255] range maps to [1, 256]
     input_size_minus_1: uint8;
 }
@@ -62,7 +61,6 @@ table WriteMemory {
 table ReadMemory {
     chip_id: ChipID;
     chip_addr: uint32;
-    output_offset: uint16;
     // [0, 255] range maps to [1, 256]
     output_size_minus_1: uint8;
 }
@@ -70,11 +68,19 @@ table ReadMemory {
 table SetTimeout {
     clock_cycles: uint32;
 }
+
 table WaitUntil {
+    chip_id: ChipID;
+    chip_addr: uint32;
 
+    cmp_func: Comparison;
+    mask: ubyte;
+    cmp_value: ubyte;
 }
-table WaitWhileZero {
 
+table WaitWhileZero {
+    chip_id: ChipID;
+    chip_addr: uint32;
 }
 
 union ProgramInstruction {
@@ -97,8 +103,13 @@ table ExecuteProgramRequest {
     input_data: [ubyte];
 }
 
-table ExecuteProgramResponse {
+table InstructionExecuted {
+    error_code: ErrorCode;
     output_data: [ubyte];
+}
+
+table ExecuteProgramResponse {
+    instructions: [InstructionExecuted];
 }
 
 ///////////////////////////////////
@@ -115,21 +126,10 @@ union Response {
     ExecuteProgramResponse,    
 }
 
-table RequestTable {
+table RequestMessage {
     request: Request;
 }
 
-table ResponseTable {
+table ResponseMessage {
     response: Response;
 }
-
-union RequestOrResponse {
-    RequestTable,
-    ResponseTable
-}
-
-table Message {
-    message: RequestOrResponse;
-}
-
-root_type Message;

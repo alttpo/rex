@@ -1,13 +1,14 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.26)
+
 project(rex LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_library(rex STATIC
-        src/rex.cpp
-        src/rex_generated.h
+add_executable(rex
+    src/rex.cpp
+    src/rex_generated.h
 )
 
-target_include_directories(rex PRIVATE
-        lib/flatbuffers/include
+target_include_directories(rex PUBLIC
+    lib/flatbuffers/include
 )
