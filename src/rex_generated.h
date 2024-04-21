@@ -48,8 +48,8 @@ struct EnterProgramResponseBuilder;
 struct ExecuteProgramRequest;
 struct ExecuteProgramRequestBuilder;
 
-struct InstructionExecuted;
-struct InstructionExecutedBuilder;
+struct InstructionOutput;
+struct InstructionOutputBuilder;
 
 struct ExecuteProgramResponse;
 struct ExecuteProgramResponseBuilder;
@@ -542,7 +542,7 @@ struct WriteMemory FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_CHIP_ID = 4,
     VT_CHIP_ADDR = 6,
-    VT_INPUT_SIZE_MINUS_1 = 8
+    VT_DATA = 8
   };
   rex::ChipID chip_id() const {
     return static_cast<rex::ChipID>(GetField<uint16_t>(VT_CHIP_ID, 0));
@@ -550,14 +550,15 @@ struct WriteMemory FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   uint32_t chip_addr() const {
     return GetField<uint32_t>(VT_CHIP_ADDR, 0);
   }
-  uint8_t input_size_minus_1() const {
-    return GetField<uint8_t>(VT_INPUT_SIZE_MINUS_1, 0);
+  const ::flatbuffers::Vector<uint8_t> *data() const {
+    return GetPointer<const ::flatbuffers::Vector<uint8_t> *>(VT_DATA);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint16_t>(verifier, VT_CHIP_ID, 2) &&
            VerifyField<uint32_t>(verifier, VT_CHIP_ADDR, 4) &&
-           VerifyField<uint8_t>(verifier, VT_INPUT_SIZE_MINUS_1, 1) &&
+           VerifyOffset(verifier, VT_DATA) &&
+           verifier.VerifyVector(data()) &&
            verifier.EndTable();
   }
 };
@@ -572,8 +573,8 @@ struct WriteMemoryBuilder {
   void add_chip_addr(uint32_t chip_addr) {
     fbb_.AddElement<uint32_t>(WriteMemory::VT_CHIP_ADDR, chip_addr, 0);
   }
-  void add_input_size_minus_1(uint8_t input_size_minus_1) {
-    fbb_.AddElement<uint8_t>(WriteMemory::VT_INPUT_SIZE_MINUS_1, input_size_minus_1, 0);
+  void add_data(::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> data) {
+    fbb_.AddOffset(WriteMemory::VT_DATA, data);
   }
   explicit WriteMemoryBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -590,12 +591,25 @@ inline ::flatbuffers::Offset<WriteMemory> CreateWriteMemory(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     rex::ChipID chip_id = rex::ChipID_SNES_WRAM,
     uint32_t chip_addr = 0,
-    uint8_t input_size_minus_1 = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> data = 0) {
   WriteMemoryBuilder builder_(_fbb);
+  builder_.add_data(data);
   builder_.add_chip_addr(chip_addr);
   builder_.add_chip_id(chip_id);
-  builder_.add_input_size_minus_1(input_size_minus_1);
   return builder_.Finish();
+}
+
+inline ::flatbuffers::Offset<WriteMemory> CreateWriteMemoryDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    rex::ChipID chip_id = rex::ChipID_SNES_WRAM,
+    uint32_t chip_addr = 0,
+    const std::vector<uint8_t> *data = nullptr) {
+  auto data__ = data ? _fbb.CreateVector<uint8_t>(*data) : 0;
+  return rex::CreateWriteMemory(
+      _fbb,
+      chip_id,
+      chip_addr,
+      data__);
 }
 
 struct ReadMemory FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -603,7 +617,7 @@ struct ReadMemory FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_CHIP_ID = 4,
     VT_CHIP_ADDR = 6,
-    VT_OUTPUT_SIZE_MINUS_1 = 8
+    VT_SIZE = 8
   };
   rex::ChipID chip_id() const {
     return static_cast<rex::ChipID>(GetField<uint16_t>(VT_CHIP_ID, 0));
@@ -611,14 +625,14 @@ struct ReadMemory FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   uint32_t chip_addr() const {
     return GetField<uint32_t>(VT_CHIP_ADDR, 0);
   }
-  uint8_t output_size_minus_1() const {
-    return GetField<uint8_t>(VT_OUTPUT_SIZE_MINUS_1, 0);
+  uint16_t size() const {
+    return GetField<uint16_t>(VT_SIZE, 0);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint16_t>(verifier, VT_CHIP_ID, 2) &&
            VerifyField<uint32_t>(verifier, VT_CHIP_ADDR, 4) &&
-           VerifyField<uint8_t>(verifier, VT_OUTPUT_SIZE_MINUS_1, 1) &&
+           VerifyField<uint16_t>(verifier, VT_SIZE, 2) &&
            verifier.EndTable();
   }
 };
@@ -633,8 +647,8 @@ struct ReadMemoryBuilder {
   void add_chip_addr(uint32_t chip_addr) {
     fbb_.AddElement<uint32_t>(ReadMemory::VT_CHIP_ADDR, chip_addr, 0);
   }
-  void add_output_size_minus_1(uint8_t output_size_minus_1) {
-    fbb_.AddElement<uint8_t>(ReadMemory::VT_OUTPUT_SIZE_MINUS_1, output_size_minus_1, 0);
+  void add_size(uint16_t size) {
+    fbb_.AddElement<uint16_t>(ReadMemory::VT_SIZE, size, 0);
   }
   explicit ReadMemoryBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -651,11 +665,11 @@ inline ::flatbuffers::Offset<ReadMemory> CreateReadMemory(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     rex::ChipID chip_id = rex::ChipID_SNES_WRAM,
     uint32_t chip_addr = 0,
-    uint8_t output_size_minus_1 = 0) {
+    uint16_t size = 0) {
   ReadMemoryBuilder builder_(_fbb);
   builder_.add_chip_addr(chip_addr);
+  builder_.add_size(size);
   builder_.add_chip_id(chip_id);
-  builder_.add_output_size_minus_1(output_size_minus_1);
   return builder_.Finish();
 }
 
@@ -930,16 +944,8 @@ inline ::flatbuffers::Offset<EnterProgramResponse> CreateEnterProgramResponse(
 ///////////////////////////////////
 struct ExecuteProgramRequest FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef ExecuteProgramRequestBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_INPUT_DATA = 4
-  };
-  const ::flatbuffers::Vector<uint8_t> *input_data() const {
-    return GetPointer<const ::flatbuffers::Vector<uint8_t> *>(VT_INPUT_DATA);
-  }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyOffset(verifier, VT_INPUT_DATA) &&
-           verifier.VerifyVector(input_data()) &&
            verifier.EndTable();
   }
 };
@@ -948,9 +954,6 @@ struct ExecuteProgramRequestBuilder {
   typedef ExecuteProgramRequest Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_input_data(::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> input_data) {
-    fbb_.AddOffset(ExecuteProgramRequest::VT_INPUT_DATA, input_data);
-  }
   explicit ExecuteProgramRequestBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -963,98 +966,87 @@ struct ExecuteProgramRequestBuilder {
 };
 
 inline ::flatbuffers::Offset<ExecuteProgramRequest> CreateExecuteProgramRequest(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> input_data = 0) {
+    ::flatbuffers::FlatBufferBuilder &_fbb) {
   ExecuteProgramRequestBuilder builder_(_fbb);
-  builder_.add_input_data(input_data);
   return builder_.Finish();
 }
 
-inline ::flatbuffers::Offset<ExecuteProgramRequest> CreateExecuteProgramRequestDirect(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    const std::vector<uint8_t> *input_data = nullptr) {
-  auto input_data__ = input_data ? _fbb.CreateVector<uint8_t>(*input_data) : 0;
-  return rex::CreateExecuteProgramRequest(
-      _fbb,
-      input_data__);
-}
-
-struct InstructionExecuted FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef InstructionExecutedBuilder Builder;
+struct InstructionOutput FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef InstructionOutputBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_ERROR_CODE = 4,
-    VT_OUTPUT_DATA = 6
+    VT_DATA = 6
   };
   rex::ErrorCode error_code() const {
     return static_cast<rex::ErrorCode>(GetField<uint8_t>(VT_ERROR_CODE, 0));
   }
-  const ::flatbuffers::Vector<uint8_t> *output_data() const {
-    return GetPointer<const ::flatbuffers::Vector<uint8_t> *>(VT_OUTPUT_DATA);
+  const ::flatbuffers::Vector<uint8_t> *data() const {
+    return GetPointer<const ::flatbuffers::Vector<uint8_t> *>(VT_DATA);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint8_t>(verifier, VT_ERROR_CODE, 1) &&
-           VerifyOffset(verifier, VT_OUTPUT_DATA) &&
-           verifier.VerifyVector(output_data()) &&
+           VerifyOffset(verifier, VT_DATA) &&
+           verifier.VerifyVector(data()) &&
            verifier.EndTable();
   }
 };
 
-struct InstructionExecutedBuilder {
-  typedef InstructionExecuted Table;
+struct InstructionOutputBuilder {
+  typedef InstructionOutput Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
   void add_error_code(rex::ErrorCode error_code) {
-    fbb_.AddElement<uint8_t>(InstructionExecuted::VT_ERROR_CODE, static_cast<uint8_t>(error_code), 0);
+    fbb_.AddElement<uint8_t>(InstructionOutput::VT_ERROR_CODE, static_cast<uint8_t>(error_code), 0);
   }
-  void add_output_data(::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> output_data) {
-    fbb_.AddOffset(InstructionExecuted::VT_OUTPUT_DATA, output_data);
+  void add_data(::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> data) {
+    fbb_.AddOffset(InstructionOutput::VT_DATA, data);
   }
-  explicit InstructionExecutedBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit InstructionOutputBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<InstructionExecuted> Finish() {
+  ::flatbuffers::Offset<InstructionOutput> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<InstructionExecuted>(end);
+    auto o = ::flatbuffers::Offset<InstructionOutput>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<InstructionExecuted> CreateInstructionExecuted(
+inline ::flatbuffers::Offset<InstructionOutput> CreateInstructionOutput(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     rex::ErrorCode error_code = rex::ErrorCode_Success,
-    ::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> output_data = 0) {
-  InstructionExecutedBuilder builder_(_fbb);
-  builder_.add_output_data(output_data);
+    ::flatbuffers::Offset<::flatbuffers::Vector<uint8_t>> data = 0) {
+  InstructionOutputBuilder builder_(_fbb);
+  builder_.add_data(data);
   builder_.add_error_code(error_code);
   return builder_.Finish();
 }
 
-inline ::flatbuffers::Offset<InstructionExecuted> CreateInstructionExecutedDirect(
+inline ::flatbuffers::Offset<InstructionOutput> CreateInstructionOutputDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     rex::ErrorCode error_code = rex::ErrorCode_Success,
-    const std::vector<uint8_t> *output_data = nullptr) {
-  auto output_data__ = output_data ? _fbb.CreateVector<uint8_t>(*output_data) : 0;
-  return rex::CreateInstructionExecuted(
+    const std::vector<uint8_t> *data = nullptr) {
+  auto data__ = data ? _fbb.CreateVector<uint8_t>(*data) : 0;
+  return rex::CreateInstructionOutput(
       _fbb,
       error_code,
-      output_data__);
+      data__);
 }
 
 struct ExecuteProgramResponse FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef ExecuteProgramResponseBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_INSTRUCTIONS = 4
+    VT_OUTPUTS = 4
   };
-  const ::flatbuffers::Vector<::flatbuffers::Offset<rex::InstructionExecuted>> *instructions() const {
-    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<rex::InstructionExecuted>> *>(VT_INSTRUCTIONS);
+  const ::flatbuffers::Vector<::flatbuffers::Offset<rex::InstructionOutput>> *outputs() const {
+    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<rex::InstructionOutput>> *>(VT_OUTPUTS);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyOffset(verifier, VT_INSTRUCTIONS) &&
-           verifier.VerifyVector(instructions()) &&
-           verifier.VerifyVectorOfTables(instructions()) &&
+           VerifyOffset(verifier, VT_OUTPUTS) &&
+           verifier.VerifyVector(outputs()) &&
+           verifier.VerifyVectorOfTables(outputs()) &&
            verifier.EndTable();
   }
 };
@@ -1063,8 +1055,8 @@ struct ExecuteProgramResponseBuilder {
   typedef ExecuteProgramResponse Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_instructions(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<rex::InstructionExecuted>>> instructions) {
-    fbb_.AddOffset(ExecuteProgramResponse::VT_INSTRUCTIONS, instructions);
+  void add_outputs(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<rex::InstructionOutput>>> outputs) {
+    fbb_.AddOffset(ExecuteProgramResponse::VT_OUTPUTS, outputs);
   }
   explicit ExecuteProgramResponseBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -1079,19 +1071,19 @@ struct ExecuteProgramResponseBuilder {
 
 inline ::flatbuffers::Offset<ExecuteProgramResponse> CreateExecuteProgramResponse(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<rex::InstructionExecuted>>> instructions = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<rex::InstructionOutput>>> outputs = 0) {
   ExecuteProgramResponseBuilder builder_(_fbb);
-  builder_.add_instructions(instructions);
+  builder_.add_outputs(outputs);
   return builder_.Finish();
 }
 
 inline ::flatbuffers::Offset<ExecuteProgramResponse> CreateExecuteProgramResponseDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    const std::vector<::flatbuffers::Offset<rex::InstructionExecuted>> *instructions = nullptr) {
-  auto instructions__ = instructions ? _fbb.CreateVector<::flatbuffers::Offset<rex::InstructionExecuted>>(*instructions) : 0;
+    const std::vector<::flatbuffers::Offset<rex::InstructionOutput>> *outputs = nullptr) {
+  auto outputs__ = outputs ? _fbb.CreateVector<::flatbuffers::Offset<rex::InstructionOutput>>(*outputs) : 0;
   return rex::CreateExecuteProgramResponse(
       _fbb,
-      instructions__);
+      outputs__);
 }
 
 struct RequestMessage FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
