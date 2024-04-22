@@ -4,10 +4,10 @@
 void dump_hex(const flatbuffers::span<uint8_t> &b) {
     printf("\n");
     for (auto i = 0; i < b.size_bytes(); i++) {
-        printf("%02X ", b[i]);
+        printf("0x%02X, ", b[i]);
         if ((i & 7) == 7) printf("\n");
     }
-    printf("\n$%04zX\n\n", b.size_bytes());
+    printf("\n// $%04zX (%zd)\n\n", b.size_bytes(), b.size_bytes());
 }
 
 void dump_packed(const flatbuffers::span<uint8_t> &b) {
@@ -22,19 +22,19 @@ void dump_packed(const flatbuffers::span<uint8_t> &b) {
         for (size_t j = 0; j < remain; j++) {
             tag |= (b[i + j] != 0) << j;
         }
-        printf("%02X ", tag);
+        printf("0x%02X, ", tag);
         total++;
         for (size_t j = 0; j < remain; j++) {
             uint8_t c = b[i + j];
             if (c != 0) {
-                printf("%02X ", c);
+                printf("0x%02X, ", c);
                 total++;
             }
         }
         printf("\n");
     }
 
-    printf("$%04zX\n", total);
+    printf("// $%04zX (%zd)\n", total, total);
 }
 
 int main() {
@@ -85,7 +85,7 @@ int main() {
                         fbb,
                         rex::ErrorCode_Success,
                         fbb.CreateVector<uint8_t>({
-                            0x14, 1, 0, 15, 16, 17, 18, 65, 66, 67, 97, 99, 101, 106
+                            0x14, 1, 0, 0, 0, 17, 18, 65, 0, 0, 0, 99, 101, 106
                         })
                     )
                 }
