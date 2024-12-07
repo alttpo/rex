@@ -1,8 +1,8 @@
 # Rexlang
-Rexlang is a statically-typed, integer-based programming language optimized for embedded applications with tight memory constraints.
+Rexlang is a statically typed, integer-based programming language optimized for embedded applications with tight memory constraints.
 
 ## Contexts
-A context in rexlang is a contiguous array of memory divided into 3 sections, useful for executing rexlang programs and immediate instructions:
+A context in rexlang is a contiguous array of bytes stored in RAM and divided into 3 sections used for executing rexlang programs and immediate instructions:
 
   1. program memory
   2. data memory
@@ -17,11 +17,13 @@ The rexlang VM stores all contexts packed end-to-end contiguously into a statica
 Contexts are allocated explicitly by the `ctx-new` instruction where the sizes of each section are measured in bytes and are provided as arguments. A context allocation will fail if there is no more space available in the fixed-size array.
 
 ## Static Typing
-All values used in rexlang's data memory and stack memory are statically typed and fixed-sized, similar to C.
+All values used in rexlang's data memory and stack memory are statically typed and fixed-sized, similar to C. Values are stored and manipulated using the native host CPU of the rexlang VM. As such, integer values wider than a single byte inherit the host CPU's endianness.
 
 Rexlang has no concept of tagged or boxed values.
 
-The following are the defined static types that values in memory may take:
+Rexlang VM does not store the types of values stored in data memory or stack memory. However, the rexlang VM but may validate that typing rules are not broken before execution begins.
+
+The following are the defined types that values may take:
 
 | Type    | Description           | Representation     | Size (bytes) |
 | ------- | --------------------- | ------------------ | -----------: |
@@ -33,15 +35,49 @@ The following are the defined static types that values in memory may take:
 | `*T`    | pointer to `T` value  | `u16`              |            2 |
 | `label` | points to instruction | `*u8`              |            2 |
 
-## The language
+## Programs
+The fundamental building block of rexlang programs is the instruction.
 
-Rexlang programs that are executed by a rexlang VM must be formatted with the binary representation defined below. However, an ASCII representation is also defined to allow easier use by developers. The ASCII representation must be directly translated to its equivalent binary representation in order to be executable.
+A rexlang instruction is defined as a function that accepts 0 to 7 parameters and returns a single value.
 
-1. an optional ASCII representation
-2. the required binary representation
+Every parameter is defined with its own static type.
 
-## ASCII representation
+An optional statically typed variadic parameter is allowed as the last parameter which lets the instruction consume a variable number of arguments. Each argument value consumed is of the same type as the variadic parameter. The types of argument values passed to a variadiac parameter may not vary.
+
+The return value is defined with a static type. The return value of an instruction is pushed onto the stack.
+
+Each instruction is assigned a unique number for its binary representation. This unique number corresponds with a unique instruction-name used for its ASCII representation.
+
+A statement is an instruction whose return value is discarded. Statements are intended to cause side-effects or to redirect control flow of the program.
+
+A rexlang program is simply a sequence of statements.
+
+Rexlang programs that are executed by the rexlang VM are directly stored in program memory using the binary representation defined below. However, an ASCII representation is also defined to make it easier for developers to write programs and understand the semantics.
+
+## Execution Stack
+The execution stack is treated as an untyped array of bytes.
+
+Typed values are pushed onto and popped off of the stack with fixed sizes determined by the static type of the value.
+
+The types of values are _not_ recorded in stack or data memory, nor are values tagged in any way with type information. Values in memory are always represented as primitives.
+
+Literal `uint` values encoded in program memory as instruction arguments have their value coerced to the parameter's static type.
+
+If the return value of an instruction is used as an argument to another instruction then there must be type agreement between the producing instruction's return value and the consuming instruction's parameter to make sure the value is pushed and popped off the stack properly.
+
+Literal `array`s are implicitly converted to `vec`s with the `addr` value pointing at the array bytes in program memory. `vec`s with addrs pointing into program memory are read-only.
+
+By design, all instructions that need to modify `vec`s must take a `*vec`.
+
+The rexlang VM always knows the count of arguments passed to an instruction at runtime since that count is encoded in the instruction's binary representation. Arguments passed into a variadic parameter all share the same type so it is safe for the instruction to pop them off the stack.
+
+TODO: define errors
+
+### ASCII representation
 ```
+program:
+    statement*
+
 statement:
 	comment |
 	instruction
@@ -60,7 +96,7 @@ expression:
 	instruction
 ```
 
-| Expression         | RegEx                     | Comment |
+| Expression         | RegEx*                    | Comment |
 | ------------------ | ------------------------- | ------- |
 | `uint`             | `[0-9A-F]+`               | uint up to 32-bit |
 | `named-constant`   | `#[0-9a-zA-Z_-\/]+`       | compile-time lookup by name and replaced with uint |
@@ -68,34 +104,27 @@ expression:
 | `array`            | `\$(_*[0-9A-F][0-9A-F])*` | array of 0..31 bytes |
 | `instruction-name` | `[a-z][0-9a-z_-]*`        | name of an instruction |
 
-The rexlang VM implementation does not use regular expressions (RegEx) for parsing the language but the syntax is convenient for documentation purposes.
+*The rexlang VM implementation does not use regular expressions (RegEx) for parsing the language; the syntax is convenient for documentation purposes.
 
-### Named constants
-Named constants are an ASCII-only feature intended to make programs more readable by giving names to raw uint values. When a named-constant is encountered in rexlang ASCII representation, it is looked up by name and replaced with its equivalent uint value.
+Comments are discarded during translation into the binary representation.
 
-**These values are subject to change
+Pointer values just a syntax feature to aid the programmer in maintaining the semantic separation between pointers and uint numbers. Pointers are replaced by the compiler with their `uint` equivalents.
 
-| Named-constant     | Value |
-| ------------------ | ----: |
-| `#snes/WRAM`       |     0 |
-| `#snes/SRAM`       |     1 |
-| `#snes/2C00`       |     2 |
+Named constants are an ASCII-only feature intended to make programs more readable by giving names to `uint` values. When a named-constant is encountered in rexlang ASCII representation, the compiler looks it up by its name in a table of known constants and replaces it with its equivalent `uint` value.
 
-## Binary representation
+### Binary representation
 The rexlang binary representation is a compact and machine-friendly representation for direct inclusion into a rexlang VM context's program memory.
-
-A rexlang program represented in ASCII **must** be transformed into its equivalent binary representation before being submitted to the rexlang VM for execution.
 
 This table describes the binary format of an expression stored in program memory: (`x` and `y` are big-endian with MSB to LSB order across bytes)
 
-| Expression                                      | Description                          |
-| ----------------------------------------------- | ------------------------------------ |
-| `0xxxxxxx`                                      | uint up to $7F                       |
-| `1000xxxx_xxxxxxxx`                             | uint up to $FFF                      |
-| `10010000_xxxxxxxx_xxxxxxxx`                    | uint up to $FFFF                     |
-| `10010001_xxxxxxxx_xxxxxxxx_xxxxxxxx`           | uint up to $FFFFFF                   |
-| `10010010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx`  | uint up to $FFFFFFFF                 |
-| `101xxxxx [x bytes]`                            | array of `x` (0..$F) bytes           |
+| Expression                                      | Description                                         |
+| ----------------------------------------------- | --------------------------------------------------- |
+| `0xxxxxxx`                                      | uint up to $7F                                      |
+| `1000xxxx_xxxxxxxx`                             | uint up to $FFF                                     |
+| `10010000_xxxxxxxx_xxxxxxxx`                    | uint up to $FFFF                                    |
+| `10010001_xxxxxxxx_xxxxxxxx_xxxxxxxx`           | uint up to $FFFFFF                                  |
+| `10010010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx`  | uint up to $FFFFFFFF                                |
+| `101xxxxx [x bytes]`                            | array of `x` (0..$F) bytes                          |
 | `11000xxx_yyyyyyyy [x expressions]`             | instruction `y` (0..$FF) with `x` (0..$7) arguments |
 
 ### An example program
@@ -142,13 +171,7 @@ C0 ?end? ; 2 bytes
 ; total 47 bytes
 ```
 
-## Instructions
-A rexlang instruction has:
- * a unique instruction-name for ASCII
- * a unique numeric value for binary
- * a single return value
- * 0 to 7 parameters
-
+## Standard Instruction Definitions
 To describe each instruction and its types, we'll define the concept of an instruction descriptor. An instruction descriptor describes the static types of the parameters and return value for an instruction. Instruction descriptors are used internally in the rexlang VM implementation to enforce static typing.
 
 Let's consider an ASCII representation of an instruction descriptor as such:
@@ -165,8 +188,6 @@ Each parameter has a name and a type.
 The maximum parameter count is bounded by the maximum argument count allowed by the binary instruction representation (see below).
 
 A variadic parameter is allowed only as the final parameter and it is denoted with a `...` suffix after the type to indicate it accepts zero or more arguments.
-
-The rexlang VM always knows the count of arguments passed to an instruction at runtime since it is encoded in the instruction's binary representation. Arguments passed into a variadic parameter all share the same type so it is safe for the instruction to pop them off the stack.
 
 The final `':' type` after the closing `)` denotes the instruction's return value type.
 
@@ -217,19 +238,11 @@ The final `':' type` after the closing `)` denotes the instruction's return valu
 (chip-write     chip:u8 offs:u32 src:vec):vec
 ```
 
-## Execution Stack
-The execution stack is treated as an untyped array of bytes.
+## Named Constants
+**These values are subject to change
 
-Typed values are pushed onto and popped off of the stack with fixed sizes determined by the static type of the value.
-
-The types of values are _not_ recorded in stack or data memory, nor are values tagged in any way with type information. Values in memory are always represented as primitives.
-
-Literal `uint` values encoded in program memory as instruction arguments have their value coerced to the parameter's static type.
-
-If the return value of an instruction is used as an argument to another instruction then there must be type agreement between the producing instruction's return value and the consuming instruction's parameter to make sure the value is pushed and popped off the stack properly.
-
-Literal `array`s are implicitly converted to `vec`s with the `addr` value pointing at the array bytes in program memory. `vec`s with addrs pointing into program memory are read-only.
-
-By design, all instructions that need to modify `vec`s must take a `*vec`.
-
-TODO: define errors
+| Named-constant     | Value |
+| ------------------ | ----: |
+| `#snes/WRAM`       |     0 |
+| `#snes/SRAM`       |     1 |
+| `#snes/2C00`       |     2 |
