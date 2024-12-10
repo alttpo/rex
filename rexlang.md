@@ -31,9 +31,8 @@ The following are the defined types that values may take:
 | `u16`   | 16-bit uint           |                    |            2 |
 | `u24`   | 24-bit uint           |                    |            3 |
 | `u32`   | 32-bit uint           |                    |            4 |
-| `vec`   | vector of bytes       | `len:u16 addr:*u8` |            4 |
 | `*T`    | pointer to `T` value  | `u16`              |            2 |
-| `label` | points to instruction | `*u8`              |            2 |
+| `vec`   | vector of bytes       | `len:u16 addr:*u8` |            4 |
 
 ## Programs
 The fundamental building block of rexlang programs is the instruction.
@@ -80,29 +79,32 @@ program:
 
 statement:
 	comment |
-	instruction
+	statement-call
 
 comment:
 	';' comment-text '\n'
 
-instruction:
-	'(' instruction-name expression* ')'
+statement-call:
+	'(' identifier expression* ')'
+
+function-call:
+	'(' identifier expression* ')'
 
 expression:
 	uint |
 	named-constant |
 	pointer |
 	array |
-	instruction
+	function-call
 ```
 
-| Expression         | RegEx*                    | Comment |
-| ------------------ | ------------------------- | ------- |
-| `uint`             | `[0-9A-F]+`               | uint up to 32-bit |
-| `named-constant`   | `#[0-9a-zA-Z_-\/]+`       | compile-time lookup by name and replaced with uint |
-| `pointer`          | `&[0-9A-F]+`              | pointer 0..$FFFF : uint |
-| `array`            | `\$(_*[0-9A-F][0-9A-F])*` | array of 0..31 bytes |
-| `instruction-name` | `[a-z][0-9a-z_-]*`        | name of an instruction |
+| Expression      | RegEx*                    | Comment |
+| --------------- | ------------------------- | ------- |
+| `uint`          | `[0-9A-F]+`               | uint up to 32-bit |
+| `named-constant`| `#[0-9a-zA-Z_-\/]+`       | compile-time lookup by name and replaced with uint |
+| `pointer`       | `&[0-9A-F]+`              | pointer 0..$FFFF : uint |
+| `array`         | `\$(_*[0-9A-F][0-9A-F])*` | array of 0..31 bytes |
+| `identifier`    | `[a-z][0-9a-z_-]*`        | name of an statement or function |
 
 *The rexlang VM implementation does not use regular expressions (RegEx) for parsing the language; the syntax is convenient for documentation purposes.
 
@@ -113,35 +115,33 @@ Pointer values just a syntax feature to aid the programmer in maintaining the se
 Named constants are an ASCII-only feature intended to make programs more readable by giving names to `uint` values. When a named-constant is encountered in rexlang ASCII representation, the compiler looks it up by its name in a table of known constants and replaces it with its equivalent `uint` value.
 
 ### Binary representation
-The rexlang binary representation is a compact and machine-friendly representation for direct inclusion into a rexlang VM context's program memory.
+The rexlang binary representation is a compact and machine-friendly representation of a program in program memory of a rexlang VM context.
 
 This table describes the binary format of an expression stored in program memory: (`x` and `y` are big-endian with MSB to LSB order across bytes)
 
-| Expression                                      | Description                                         |
-| ----------------------------------------------- | --------------------------------------------------- |
-| `0xxxxxxx`                                      | uint up to $7F                                      |
-| `1000xxxx_xxxxxxxx`                             | uint up to $FFF                                     |
-| `10010000_xxxxxxxx_xxxxxxxx`                    | uint up to $FFFF                                    |
-| `10010001_xxxxxxxx_xxxxxxxx_xxxxxxxx`           | uint up to $FFFFFF                                  |
-| `10010010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx`  | uint up to $FFFFFFFF                                |
-| `101xxxxx [x bytes]`                            | array of `x` (0..$F) bytes                          |
-| `11000xxx_yyyyyyyy [x expressions]`             | instruction `y` (0..$FF) with `x` (0..$7) arguments |
+| Expression                                      | Description                                        |
+| ----------------------------------------------- | -------------------------------------------------- |
+| `0xxxxxxx`                                      | uint up to $7F                                     |
+| `1000xxxx_xxxxxxxx`                             | uint up to $FFF                                    |
+| `10010000_xxxxxxxx_xxxxxxxx`                    | uint up to $FFFF                                   |
+| `10010001_xxxxxxxx_xxxxxxxx_xxxxxxxx`           | uint up to $FFFFFF                                 |
+| `10010010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx`  | uint up to $FFFFFFFF                               |
+| `101xxxxx` [x bytes]                            | array of `x` (0..$1F) bytes                        |
+| `110xxxxx_yyyyyyyy` [x expressions]             | statement `y` (0..$FF) with `x` (0..$1F) arguments |
+| `111xxxxx_yyyyyyyy` [x expressions]             | function  `y` (0..$FF) with `x` (0..$1F) arguments |
 
 ### An example program
 
-Here we demonstrate rexlang in practice with an example program in both its ASCII and equivalent binary representations:
+Here we demonstrate rexlang in practice with an example program:
 
-#### ASCII:
 ```
 ; declare context 0 with prgm=$40 bytes, stack=$20 bytes, data=$15 bytes:
 (ctx-new 0 40 20 15)
 ; begin entering instructions into program memory of context 0:
 (begin)
-    ; declare variables in data section:
-    (vec    &0 10 $9C002C_6CEAFF)
-    (u8    &14 0)
-    ; read the first byte from "snes/2C00" chip memory and if it's not zero then return
-    (if (ne (st-u8 &14 (chip-read-u8 #snes/2C00 0)) 0) (return))
+    ; read the first byte from "nmi-exe" chip memory and if it's not zero then return
+    (if (ne (st-u8 &14 (chip-read-u8 #nmi-exe 0)) 0)
+      (return))
     ; read $10 bytes from "snes/WRAM" chip memory
     (chip-read #snes/WRAM 10 &0)
     ; write the $10 bytes to the response
@@ -149,26 +149,6 @@ Here we demonstrate rexlang in practice with an example program in both its ASCI
     ; implied (return) to restart task
 ; end entering instructions and begin execution
 (end)
-```
-
-#### Binary:
-Parentheses denote expression boundaries.
-```
-; declare context 0 with prgm=$40 bytes, stack=$20 bytes, data=$15 bytes:
-C4 ?? (00) (40) (20) (15) ; 6 bytes
-; begin entering instructions into program memory of context 0:
-C0 ?? ; 2 bytes
-    ; declare variables in data section:
-    C3 ?? (00) (10) (A6 9C 00 2C 6C EA FF) ; 11 bytes
-    C2 ?? (14) (00) ; 4 bytes
-    C2 ?if? (C2 ?ne? (C2 ?st-u8? 14 (C2 ?chip-read-u8? 02 00)) 00) (C0 ?return?) ; 14 bytes
-    C3 ?chip-read? (00) (10) (00) ; 5 bytes
-    C1 ?rsp-write? (00) ; 3 bytes
-    ; internal 37 bytes of program memory
-; end entering instructions and begin execution
-C0 ?end? ; 2 bytes
-
-; total 47 bytes
 ```
 
 ## Standard Instruction Definitions
