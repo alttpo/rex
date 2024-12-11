@@ -2,77 +2,92 @@
 Rexlang is a statically typed, integer-based programming language optimized for embedded applications with tight memory constraints.
 
 ## Contexts
-A context in rexlang is a contiguous array of bytes stored in RAM and divided into 3 sections used for executing rexlang programs and immediate instructions:
+A context in rexlang is a contiguous array of bytes stored in RAM and divided into 3 sections used for executing rexlang programs and immediate statements:
 
   1. program memory
   2. data memory
   3. stack memory
 
-Program memory is read-only during execution, data memory is read-write, and stack memory is only accessible by the execution VM.
-
-Any attempt by a program to directly access stack memory via a pointer will trigger an error.
+Statements and functions may only directly access data memory. An out of bounds memory access is treated as an error and the program is halted.
 
 The rexlang VM stores all contexts packed end-to-end contiguously into a statically allocated fixed-size array.
 
-Contexts are allocated explicitly by the `ctx-new` instruction where the sizes of each section are measured in bytes and are provided as arguments. A context allocation will fail if there is no more space available in the fixed-size array.
+Contexts are allocated explicitly by the `ctx-new` statement where the sizes of each section are measured in bytes and are provided as `u16` arguments. A context allocation will fail with an error if there is no more space available in the fixed-size array.
 
-## Static Typing
-All values used in rexlang's data memory and stack memory are statically typed and fixed-sized, similar to C. Values are stored and manipulated using the native host CPU of the rexlang VM. As such, integer values wider than a single byte inherit the host CPU's endianness.
+## Binary program format
+The rexlang binary program format is a compact and machine-friendly representation of a program as it appears in the program memory of a rexlang VM context.
 
-Rexlang has no concept of tagged or boxed values.
+This binary format is a byte-aligned stream so that statements are fully addressable at the byte offset without requiring bit offsets. Great effort has been expended to make sure that this format is as efficient as possible with minimal overhead where necessary, short of turning the entire format into an unaligned bit stream of course.
 
-Rexlang VM does not store the types of values stored in data memory or stack memory. However, the rexlang VM but may validate that typing rules are not broken before execution begins.
+The tables below describe the legal binary formats allowed for each component of a rexlang program.
 
-The following are the defined types that values may take:
+Every table row describes one of the possible bit patterns allowed for the component the table describes.
 
-| Type    | Description           | Representation     | Size (bytes) |
-| ------- | --------------------- | ------------------ | -----------: |
-| `u8`    |  8-bit uint           |                    |            1 |
-| `u16`   | 16-bit uint           |                    |            2 |
-| `u24`   | 24-bit uint           |                    |            3 |
-| `u32`   | 32-bit uint           |                    |            4 |
-| `*T`    | pointer to `T` value  | `u16`              |            2 |
-| `vec`   | vector of bytes       | `len:u16 addr:*u8` |            4 |
+Bits are listed from most-significant bit (MSB) to least-significant bit (LSB) from left to right and are clustered in octets (8-bit bytes).
 
-## Programs
-The fundamental building block of rexlang programs is the instruction.
+`0`s and `1`s are literal bits required to be set or cleared for the row's pattern to match.
 
-A rexlang instruction is defined as a function that accepts 0 to 7 parameters and returns a single value.
+Alpha characters such as `x` and `y` are treated as groups of bits ordered MSB to LSB that represent an N-bit unsigned integer used for various purposes. The bits the comprise the full integer may cross byte boundaries.
 
-Every parameter is defined with its own static type.
+A rexlang program is simply an ordered sequence of `statement-call`s.
 
-An optional statically typed variadic parameter is allowed as the last parameter which lets the instruction consume a variable number of arguments. Each argument value consumed is of the same type as the variadic parameter. The types of argument values passed to a variadiac parameter may not vary.
+Statement-calls specify a mix of literal typed argument values and function-calls whose return values are used as arguments.
 
-The return value is defined with a static type. The return value of an instruction is pushed onto the stack.
+### statement-call formats
+| Format                              | Description                                              |
+| ----------------------------------- | -------------------------------------------------------- |
+| `111xxxxx_0yyyyyyy` [x arg-groups]  | call statement `y` (0..$7F) with `x` (0..$1F) arg-groups |
 
-Each instruction is assigned a unique number for its binary representation. This unique number corresponds with a unique instruction-name used for its ASCII representation.
+### arg-group formats
+| Format                                    | Description                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------ |
+| `110xxxxx_0yyyyyyy` [x+1 arg-groups]      | call function `y` (0..$7F) with `x+1` (1..$20) arg-groups, and push return values    |
+| `010xbbaa` [x+1 values]                   | push `x+1`  (1..$2) values of type `a`, `b` (in order)                               |
+| `011000xx_ddccbbaa` [x+1 values]          | push `x+1`  (1..$4) values of type `a`, `b`, `c`, `d` (in order)                     |
+| `01100xxx_ddccbbaa_hhggffee` [x+1 values] | push `x+1`  (1..$8) values of type `a`, `b`, `c`, `d`, `e`, `f`, `g`, `h` (in order) |
+| `00ttxxxx` [x+1 values]                   | push `x+1` (1..$10) values, all of type `t`                                          |
 
-A statement is an instruction whose return value is discarded. Statements are intended to cause side-effects or to redirect control flow of the program.
+### value formats
+| Format              | Description                                    |
+| ------------------- | ---------------------------------------------- |
+| `xxxxxxxx`          | `u8` value                                     |
+| `xxxxxxxx_xxxxxxxx` | `u16` value                                    |
+| `xxxxxxxx_xxxxxxxx` | `*u8` pointer in data memory as a `u16` value  |
+| `xxxxxxxx_xxxxxxxx` | `*u16` pointer in data memory as a `u16` value |
 
-A rexlang program is simply a sequence of statements.
+### Types
+A type number is a `u2`, a 2-bit unsigned integer, and represents one of four possible types as defined by this table:
 
-Rexlang programs that are executed by the rexlang VM are directly stored in program memory using the binary representation defined below. However, an ASCII representation is also defined to make it easier for developers to write programs and understand the semantics.
+| Type  | Name    | Description      | Size (bytes) |
+| ----: | ------- | ---------------- | -----------: |
+|   `0` | `u8`    |  8-bit uint      |            1 |
+|   `1` | `u16`   | 16-bit uint      |            2 |
+|   `2` | `*u8`   | pointer to `u8`  |            2 |
+|   `3` | `*u16`  | pointer to `u16` |            2 |
 
-## Execution Stack
-The execution stack is treated as an untyped array of bytes.
+NOTE: pointers are absolute addresses in data memory and share the `u16` format.
 
-Typed values are pushed onto and popped off of the stack with fixed sizes determined by the static type of the value.
+### Arguments
+Statement-calls and function-calls specify the number `arg-group`s (_not_ the number of arguments) that follow in order to delimit the end of the statement-call/function-call.
 
-The types of values are _not_ recorded in stack or data memory, nor are values tagged in any way with type information. Values in memory are always represented as primitives.
+An arg-group represents a way to pass one or more typed values as arguments to the statement/function being called.
 
-Literal `uint` values encoded in program memory as instruction arguments have their value coerced to the parameter's static type.
+A function-call is an arg-group where the return values of the function are passed as arguments to the outer statement/function being called.
 
-If the return value of an instruction is used as an argument to another instruction then there must be type agreement between the producing instruction's return value and the consuming instruction's parameter to make sure the value is pushed and popped off the stack properly.
+Otherwise, there are 4 arg-groups which allow for different ways of passing literal typed values as arguments, primarily differing in the number of typed arguments and how the types are specified and/or grouped.
 
-Literal `array`s are implicitly converted to `vec`s with the `addr` value pointing at the array bytes in program memory. `vec`s with addrs pointing into program memory are read-only.
+The total count of arguments passed to a statement/function is the sum of all its arg-groups' argument counts.
 
-By design, all instructions that need to modify `vec`s must take a `*vec`.
+## Static Type Safety
+Every statement/function has a well-defined set of typed parameters that it accepts as arguments.
 
-The rexlang VM always knows the count of arguments passed to an instruction at runtime since that count is encoded in the instruction's binary representation. Arguments passed into a variadic parameter all share the same type so it is safe for the instruction to pop them off the stack.
+Arguments are passed to parameters by position in the order that parameters are defined. It is not possible to bypass passing a particular parameter. All parameters must be passed an argument of the same type.
 
-TODO: define errors
+The binary program format ensures that every literal value passed to a statement/function as an argument is of a specific type. These argument types must exactly match the statement/function's defined parameter types or else a type mismatch error is raised.
 
-### ASCII representation
+One or more statement/function's arguments may be bound to the return values of a function call. The return value types of the function call must exactly match the parameter types at the positions where the function call is made or else a type mismatch error is raised. The return values are passed as arguments to the parameters in the order the return values are defined in.
+
+## ASCII program format
 ```
 program:
     statement*
@@ -92,108 +107,114 @@ function-call:
 
 expression:
 	uint |
-	named-constant |
 	pointer |
-	array |
+	named-constant |
 	function-call
 ```
 
-| Expression      | RegEx*                    | Comment |
+| Token           | RegEx*                    | Comment |
 | --------------- | ------------------------- | ------- |
-| `uint`          | `[0-9A-F]+`               | uint up to 32-bit |
-| `named-constant`| `#[0-9a-zA-Z_-\/]+`       | compile-time lookup by name and replaced with uint |
-| `pointer`       | `&[0-9A-F]+`              | pointer 0..$FFFF : uint |
-| `array`         | `\$(_*[0-9A-F][0-9A-F])*` | array of 0..31 bytes |
 | `identifier`    | `[a-z][0-9a-z_-]*`        | name of an statement or function |
+| `uint`          | `[0-9A-F]+[uU]?`          | `u8` or `u16` |
+| `pointer`       | `[0-9A-F]+\*[uU]?`        | pointer 0..$FFFF |
+| `named-constant`| `{[0-9a-zA-Z_-\/]+}[uU]?` | compile-time lookup by name |
 
 *The rexlang VM implementation does not use regular expressions (RegEx) for parsing the language; the syntax is convenient for documentation purposes.
 
 Comments are discarded during translation into the binary representation.
 
-Pointer values just a syntax feature to aid the programmer in maintaining the semantic separation between pointers and uint numbers. Pointers are replaced by the compiler with their `uint` equivalents.
+The suffixes denote which type the value is. A missing suffix and a `u` suffix defaults to a `u8`, a `U` suffix is a `u16`.
 
-Named constants are an ASCII-only feature intended to make programs more readable by giving names to `uint` values. When a named-constant is encountered in rexlang ASCII representation, the compiler looks it up by its name in a table of known constants and replaces it with its equivalent `uint` value.
+Named constants are an ASCII-only feature intended to make programs more readable by giving names to common values. When a named-constant is encountered in rexlang ASCII representation, the compiler looks it up by its name in a table of known constants and replaces it with its equivalent typed value.
 
-### Binary representation
-The rexlang binary representation is a compact and machine-friendly representation of a program in program memory of a rexlang VM context.
-
-This table describes the binary format of an expression stored in program memory: (`x` and `y` are big-endian with MSB to LSB order across bytes)
-
-| Expression                                      | Description                                        |
-| ----------------------------------------------- | -------------------------------------------------- |
-| `0xxxxxxx`                                      | uint up to $7F                                     |
-| `1000xxxx_xxxxxxxx`                             | uint up to $FFF                                    |
-| `10010000_xxxxxxxx_xxxxxxxx`                    | uint up to $FFFF                                   |
-| `10010001_xxxxxxxx_xxxxxxxx_xxxxxxxx`           | uint up to $FFFFFF                                 |
-| `10010010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx`  | uint up to $FFFFFFFF                               |
-| `101xxxxx` [x bytes]                            | array of `x` (0..$1F) bytes                        |
-| `110xxxxx_yyyyyyyy` [x expressions]             | statement `y` (0..$FF) with `x` (0..$1F) arguments |
-| `111xxxxx_yyyyyyyy` [x expressions]             | function  `y` (0..$FF) with `x` (0..$1F) arguments |
-
-### An example program
-
-Here we demonstrate rexlang in practice with an example program:
-
+## Example program
 ```
-; declare context 0 with prgm=$40 bytes, stack=$20 bytes, data=$15 bytes:
-(ctx-new 0 40 20 15)
-; begin entering instructions into program memory of context 0:
+; declare context 0 with program=$40 bytes, stack=$20 bytes, data=$15 bytes
+(ctx-new 0u 40U 20U 15U)
+; begin entering instructions into program memory of context 0
 (begin)
     ; read the first byte from "nmi-exe" chip memory and if it's not zero then return
-    (if (ne (st-u8 &14 (chip-read-u8 #nmi-exe 0)) 0)
-      (return))
-    ; read $10 bytes from "snes/WRAM" chip memory
-    (chip-read #snes/WRAM 10 &0)
-    ; write the $10 bytes to the response
-    (rsp-write &0)
+    (jmp-if 0*u (ne 0u (chip-read-u8 {nmi-exe}u 0U)))
+    ; read $10 bytes from "WRAM" chip memory into data memory at 0
+    (chip-read {WRAM}u 10U 0*u)
+    ; write the $10 bytes from data memory to the response
+    (rsp-write 10U 0*u)
     ; implied (return) to restart task
 ; end entering instructions and begin execution
 (end)
 ```
 
-## Standard Instruction Definitions
-To describe each instruction and its types, we'll define the concept of an instruction descriptor. An instruction descriptor describes the static types of the parameters and return value for an instruction. Instruction descriptors are used internally in the rexlang VM implementation to enforce static typing.
+## Statements
+Statements are the building blocks of rexlang programs and may also be used in immediate mode.
 
-Let's consider an ASCII representation of an instruction descriptor as such:
+Statements return no values and are primarily intended to produce side effects, trigger external behavior, or to affect control flow of the rexlang program.
 
-    '(' instruction-name
+Since statements do not return values, they cannot be used as arguments to other statements or function calls.
+
+    '(' statement-name
         ( param-name ':' type )*
         ( param-name ':' type '...' )?
-    ')' ':' type
+    ')'
 
-The quoted parentheses `(` and `)` separate the instruction-name and its parameter descriptions from the return value description.
+```
+; jump to offset `n` in program memory (must be a statement)
+(jmp n:u16)
+; jump to offset `n` if `test` != 0
+(jmp-if n:u16 test:u8)
+; TODO: define more...
+```
+
+## Function Descriptors
+To describe each function, we'll define the concept of a function descriptor.
+
+A function descriptor describes the static types of a function's parameters and return values. Function descriptors are used internally in the rexlang VM implementation to enforce static typing.
+
+Let's consider an ASCII representation of a function descriptor as such:
+
+    '(' function-name
+        ( param-name ':' type )*
+        ( param-name ':' type '...' )?
+    ')' ':' '(' (ret-name ':' type)+ ')'
 
 Each parameter has a name and a type.
 
-The maximum parameter count is bounded by the maximum argument count allowed by the binary instruction representation (see below).
+Each return value has a name and type. There may be multiple return values.
+
+The maximum parameter count is bounded by the maximum argument count allowed by the program binary representation.
 
 A variadic parameter is allowed only as the final parameter and it is denoted with a `...` suffix after the type to indicate it accepts zero or more arguments.
 
-The final `':' type` after the closing `)` denotes the instruction's return value type.
+The final `':'` after the closing `)` denotes the function's return values.
 
 ```
-; TODO: integer arithmetic
-; TODO: control flow
-; TODO: context handling
+; compare `a` and `b`
+(eq a:u8  b:u8):u8
+(eq a:u16 b:u16):u8
 
-; define a variable in data memory, allocate space, declare its type, and initialize its value:
-(def-u8  ptr:*u8  init:u8 ):*u8
-(def-u16 ptr:*u16 init:u16):*u16
-(def-u24 ptr:*u24 init:u24):*u24
-(def-u32 ptr:*u32 init:u32):*u32
-(def-vec ptr:*vec cap:u16 init:array):*vec
+(ne a:u8  b:u8):u8
+(ne a:u16 b:u16):u8
+
+(lt a:u8  b:u8):u8
+(lt a:u16 b:u16):u8
+
+(le a:u8  b:u8):u8
+(le a:u16 b:u16):u8
+
+(gt a:u8  b:u8):u8
+(gt a:u16 b:u16):u8
+
+(ge a:u8  b:u8):u8
+(ge a:u16 b:u16):u8
+
+; TODO: integer arithmetic
 
 ; load a value from data or program memory:
 (ld-u8  ptr:*u8 ):u8
 (ld-u16 ptr:*u16):u16
-(ld-u24 ptr:*u24):u24
-(ld-u32 ptr:*u32):u32
 
 ; store a value in data memory:
 (st-u8  ptr:*u8  val:u8 ):u8
 (st-u16 ptr:*u16 val:u16):u16
-(st-u24 ptr:*u24 val:u24):u24
-(st-u32 ptr:*u32 val:u32):u32
 
 ; load a vec from data memory:
 (ld-vec ptr:*vec):vec
@@ -201,21 +222,17 @@ The final `':' type` after the closing `)` denotes the instruction's return valu
 ; append a value to a vec in data memory:
 (append-u8  dest:*vec src:u8... ):*vec
 (append-u16 dest:*vec src:u16...):*vec
-(append-u24 dest:*vec src:u24...):*vec
-(append-u32 dest:*vec src:u32...):*vec
 (append-vec dest:*vec src:vec...):*vec
 
 ; read data from chip memory:
-(chip-read-u8   chip:u8 offs:u32):u8
-(chip-read-u16  chip:u8 offs:u32):u16
-(chip-read-u24  chip:u8 offs:u32):u24
-(chip-read      chip:u8 offs:u32 len:u16 dest:*vec):*vec
+(chip-read-u8   chip:u8 offs:u16):u8
+(chip-read-u16  chip:u8 offs:u16):u16
+(chip-read      chip:u8 offs:u16 len:u16 dest:*vec):*vec
 
 ; write data to chip memory:
-(chip-write-u8  chip:u8 offs:u32 src:u8):u8
-(chip-write-u16 chip:u8 offs:u32 src:u16):u16
-(chip-write-u24 chip:u8 offs:u32 src:u24):u24
-(chip-write     chip:u8 offs:u32 src:vec):vec
+(chip-write-u8  chip:u8 offs:u16 src:u8):u8
+(chip-write-u16 chip:u8 offs:u16 src:u16):u16
+(chip-write     chip:u8 offs:u16 src:vec):vec
 ```
 
 ## Named Constants
@@ -223,6 +240,6 @@ The final `':' type` after the closing `)` denotes the instruction's return valu
 
 | Named-constant     | Value |
 | ------------------ | ----: |
-| `#snes/WRAM`       |     0 |
-| `#snes/SRAM`       |     1 |
-| `#snes/2C00`       |     2 |
+| `snes/WRAM`        |     0 |
+| `snes/SRAM`        |     1 |
+| `snes/NMI-EXE`     |     2 |
