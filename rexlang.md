@@ -1,21 +1,8 @@
 # Rexlang
 Rexlang is a statically typed, integer-based programming language optimized for embedded applications with tight memory constraints.
 
-## Contexts
-A context in rexlang is a contiguous array of bytes stored in RAM and divided into 3 sections used for executing rexlang programs and immediate statements:
-
-  1. program memory
-  2. data memory
-  3. stack memory
-
-Statements and functions may only directly access data memory. An out of bounds memory access is treated as an error and the program is halted.
-
-The rexlang VM stores all contexts packed end-to-end contiguously into a statically allocated fixed-size array.
-
-Contexts are allocated explicitly by the `ctx-new` statement where the sizes of each section are measured in bytes and are provided as `u16` arguments. A context allocation will fail with an error if there is no more space available in the fixed-size array.
-
 ## Binary program format
-The rexlang binary program format is a compact and machine-friendly representation of a program as it appears in the program memory of a rexlang VM context.
+The rexlang binary program format is a compact and machine-friendly representation of a program as it appears in program memory.
 
 This binary format is a byte-aligned stream so that statements are fully addressable at the byte offset without requiring bit offsets. Great effort has been expended to make sure that this format is as efficient as possible with minimal overhead where necessary, short of turning the entire format into an unaligned bit stream of course.
 
@@ -39,13 +26,15 @@ Statement-calls specify a mix of literal typed argument values and function-call
 | `111xxxxx_0yyyyyyy` [x arg-groups]  | call statement `y` (0..$7F) with `x` (0..$1F) arg-groups |
 
 ### arg-group formats
-| Format                                    | Description                                                                          |
-| ----------------------------------------- | ------------------------------------------------------------------------------------ |
-| `110xxxxx_0yyyyyyy` [x+1 arg-groups]      | call function `y` (0..$7F) with `x+1` (1..$20) arg-groups, and push return values    |
-| `010xbbaa` [x+1 values]                   | push `x+1`  (1..$2) values of type `a`, `b` (in order)                               |
-| `011000xx_ddccbbaa` [x+1 values]          | push `x+1`  (1..$4) values of type `a`, `b`, `c`, `d` (in order)                     |
-| `01100xxx_ddccbbaa_hhggffee` [x+1 values] | push `x+1`  (1..$8) values of type `a`, `b`, `c`, `d`, `e`, `f`, `g`, `h` (in order) |
-| `00ttxxxx` [x+1 values]                   | push `x+1` (1..$10) values, all of type `t`                                          |
+| Type           | Format                                    | Description                                                                         |
+| -------------- | ----------------------------------------- | ----------------------------------------------------------------------------------- |
+| function-call  | `110xxxxx_0yyyyyyy` [x+1 arg-groups]      | call function `y` (0..$7F) with `x+1` (1..$20) arg-groups, and push return values   |
+| typed values   | `100xbbaa` [x+1 values]                   | push `x+1` (1..$2) values of type `a`, `b` (in order)                               |
+| typed values   | `101000xx_ddccbbaa` [x+1 values]          | push `x+1` (1..$4) values of type `a`, `b`, `c`, `d` (in order)                     |
+| typed values   | `101001xx_ddccbbaa_hhggffee` [x+1 values] | push `x+5` (5..$8) values of type `a`, `b`, `c`, `d`, `e`, `f`, `g`, `h` (in order) |
+| array          | `0txxxxxx` [x+1 values]                   | push `len:u8` `ptr:*t` to array of `x+1` (1..$40) values, all of type `t`           |
+
+An array arg-group pushes to the stack the length of the array (between 1 and $40 bytes) as a `u8` value and then a pointer of type `*t` to the array data in program memory that immediately follows. The allowable types for array values are only `u8` and `u16`. An array may not contain pointer typed values.
 
 ### value formats
 | Format              | Description                                    |
@@ -65,10 +54,8 @@ A type number is a `u2`, a 2-bit unsigned integer, and represents one of four po
 |   `2` | `*u8`   | pointer to `u8`  |            2 |
 |   `3` | `*u16`  | pointer to `u16` |            2 |
 
-NOTE: pointers are absolute addresses in data memory and share the `u16` format.
-
 ### Arguments
-Statement-calls and function-calls specify the number `arg-group`s (_not_ the number of arguments) that follow in order to delimit the end of the statement-call/function-call.
+Statement-calls and function-calls specify the number of `arg-group`s (_not_ the number of arguments) that follow in order to delimit the end of the statement-call/function-call.
 
 An arg-group represents a way to pass one or more typed values as arguments to the statement/function being called.
 
@@ -78,14 +65,29 @@ Otherwise, there are 4 arg-groups which allow for different ways of passing lite
 
 The total count of arguments passed to a statement/function is the sum of all its arg-groups' argument counts.
 
-## Static Type Safety
-Every statement/function has a well-defined set of typed parameters that it accepts as arguments.
+## Memory layout and Pointers
 
-Arguments are passed to parameters by position in the order that parameters are defined. It is not possible to bypass passing a particular parameter. All parameters must be passed an argument of the same type.
+Memory used for rexlang programs is stored in a context. A context is a contiguous array of bytes stored in RAM. A context allocation will fail with an error if there is no more memory available. Contexts are divided into 3 sections stored in the following order:
 
-The binary program format ensures that every literal value passed to a statement/function as an argument is of a specific type. These argument types must exactly match the statement/function's defined parameter types or else a type mismatch error is raised.
+  1. data memory
+  2. program memory
+  3. stack memory
 
-One or more statement/function's arguments may be bound to the return values of a function call. The return value types of the function call must exactly match the parameter types at the positions where the function call is made or else a type mismatch error is raised. The return values are passed as arguments to the parameters in the order the return values are defined in.
+Contexts are allocated explicitly by the `ctx-new` statement where the sizes of each section are measured in bytes and are provided as `u16` typed arguments.
+
+These memory sections are subject to the following rules:
+
+  1. Data memory is readable and writable by programs.
+  2. Program memory is only readable by programs.
+  3. Stack memory may not be directly read from nor written to by programs. It is used by the VM for execution purposes only.
+
+Any violation of the above rules will raise an error and the program will be halted.
+
+Pointers point to memory addresses within the current context and are represented as `u16` values.
+
+Pointers may point to addresses in either data memory or program memory.
+
+An out of bounds memory access (via pointer) will raise an error and the program will be halted.
 
 ## ASCII program format
 ```
@@ -108,6 +110,7 @@ function-call:
 expression:
 	uint |
 	pointer |
+	array |
 	named-constant |
 	function-call
 ```
@@ -116,6 +119,7 @@ expression:
 | --------------- | ------------------------- | ------- |
 | `identifier`    | `[a-z][0-9a-z_-]*`        | name of an statement or function |
 | `uint`          | `[0-9A-F]+[uU]?`          | `u8` or `u16` |
+| `array`         | `\$(_*[0-9A-F][0-9A-F])+` | array of `u8` values |
 | `pointer`       | `[0-9A-F]+\*[uU]?`        | pointer 0..$FFFF |
 | `named-constant`| `{[0-9a-zA-Z_-\/]+}[uU]?` | compile-time lookup by name |
 
@@ -123,38 +127,72 @@ expression:
 
 Comments are discarded during translation into the binary representation.
 
-The suffixes denote which type the value is. A missing suffix and a `u` suffix defaults to a `u8`, a `U` suffix is a `u16`.
+The `[uU]` suffix denotes which type the value is. The `u` suffix and an absent suffix denote `u8`, and a `U` suffix denotes `u16`.
 
 Named constants are an ASCII-only feature intended to make programs more readable by giving names to common values. When a named-constant is encountered in rexlang ASCII representation, the compiler looks it up by its name in a table of known constants and replaces it with its equivalent typed value.
 
 ## Example program
 ```
 ; declare context 0 with program=$40 bytes, stack=$20 bytes, data=$15 bytes
-(ctx-new 0u 40U 20U 15U)
+(ctx-new 0 40U 20U 15U)
 ; begin entering instructions into program memory of context 0
 (begin)
-    ; read the first byte from "nmi-exe" chip memory and if it's not zero then return
-    (jmp-if 0*u (ne 0u (chip-read-u8 {nmi-exe}u 0U)))
+    ; read the first byte from "NMI-EXE" chip memory and if it's not zero then return
+    (jmp-if 0U (ne 0 (chip-read-u8 {NMI-EXE} 0U)))
+    (chip-write {NMI-EXE} 0U $9C002C_6CEAFF)
     ; read $10 bytes from "WRAM" chip memory into data memory at 0
-    (chip-read {WRAM}u 10U 0*u)
+    (chip-read {WRAM} 10U 0*)
     ; write the $10 bytes from data memory to the response
-    (rsp-write 10U 0*u)
-    ; implied (return) to restart task
+    (rsp-write 10U 0*)
+    (jmp 0U)
 ; end entering instructions and begin execution
 (end)
 ```
 
 ## Statements
-Statements are the building blocks of rexlang programs and may also be used in immediate mode.
-
-Statements return no values and are primarily intended to produce side effects, trigger external behavior, or to affect control flow of the rexlang program.
-
-Since statements do not return values, they cannot be used as arguments to other statements or function calls.
+Let's define a statement as follows:
 
     '(' statement-name
         ( param-name ':' type )*
         ( param-name ':' type '...' )?
     ')'
+
+Each parameter has a name and a type.
+
+A variadic parameter is allowed only as the final parameter and it is denoted with a `...` suffix after the type to indicate it accepts zero or more arguments.
+
+Statements return no values and are primarily intended to produce side effects, trigger external behavior, or to affect control flow of the rexlang program.
+
+Since statements do not return values, they cannot be used as arguments to other statements or function calls.
+
+## Functions
+Let's define a function as follows:
+
+    '(' function-name
+        ( param-name ':' type )*
+        ( param-name ':' type '...' )?
+    ')' ':' '('
+        ( ret-name ':' type )+
+    ')'
+
+Each parameter has a name and a type.
+
+Each return value has a name and type. There may be multiple return values.
+
+A variadic parameter is allowed only as the final parameter and it is denoted with a `...` suffix after the type to indicate it accepts zero or more arguments.
+
+The `':'` separator after the initial closing `)` denotes the function's return values of which there may be more than one.
+
+## Static Type Safety
+Every statement/function has a well-defined set of typed parameters that it accepts as arguments.
+
+Arguments are passed to parameters by position in the order that parameters are defined. It is not possible to bypass passing a particular parameter. All parameters must be passed an argument of the same type.
+
+The binary program format ensures that every literal value passed to a statement/function as an argument is of a specific type. These argument types must exactly match the statement/function's defined parameter types or else a type mismatch error is raised.
+
+One or more statement/function's arguments may be bound to the return values of a function call. The return value types of the function call must exactly match the parameter types at the positions where the function call is made or else a type mismatch error is raised. The return values are passed as arguments to the parameters in the order the return values are defined in.
+
+## Standard Library
 
 ```
 ; jump to offset `n` in program memory (must be a statement)
@@ -162,31 +200,7 @@ Since statements do not return values, they cannot be used as arguments to other
 ; jump to offset `n` if `test` != 0
 (jmp-if n:u16 test:u8)
 ; TODO: define more...
-```
 
-## Function Descriptors
-To describe each function, we'll define the concept of a function descriptor.
-
-A function descriptor describes the static types of a function's parameters and return values. Function descriptors are used internally in the rexlang VM implementation to enforce static typing.
-
-Let's consider an ASCII representation of a function descriptor as such:
-
-    '(' function-name
-        ( param-name ':' type )*
-        ( param-name ':' type '...' )?
-    ')' ':' '(' (ret-name ':' type)+ ')'
-
-Each parameter has a name and a type.
-
-Each return value has a name and type. There may be multiple return values.
-
-The maximum parameter count is bounded by the maximum argument count allowed by the program binary representation.
-
-A variadic parameter is allowed only as the final parameter and it is denoted with a `...` suffix after the type to indicate it accepts zero or more arguments.
-
-The final `':'` after the closing `)` denotes the function's return values.
-
-```
 ; compare `a` and `b`
 (eq a:u8  b:u8):u8
 (eq a:u16 b:u16):u8
@@ -216,8 +230,6 @@ The final `':'` after the closing `)` denotes the function's return values.
 (st-u8  ptr:*u8  val:u8 ):u8
 (st-u16 ptr:*u16 val:u16):u16
 
-; load a vec from data memory:
-(ld-vec ptr:*vec):vec
 
 ; append a value to a vec in data memory:
 (append-u8  dest:*vec src:u8... ):*vec
@@ -232,7 +244,7 @@ The final `':'` after the closing `)` denotes the function's return values.
 ; write data to chip memory:
 (chip-write-u8  chip:u8 offs:u16 src:u8):u8
 (chip-write-u16 chip:u8 offs:u16 src:u16):u16
-(chip-write     chip:u8 offs:u16 src:vec):vec
+(chip-write     chip:u8 offs:u16 src:u8...)
 ```
 
 ## Named Constants
