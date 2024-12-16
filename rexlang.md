@@ -162,9 +162,9 @@ Every function has a well-defined set of typed parameters that it accepts as arg
 
 Arguments are passed to parameters by position in the order that parameters are defined. It is not possible to bypass passing a particular parameter. All parameters must be passed an argument of the same type.
 
-The binary program format ensures that every literal value passed to a statement/function as an argument is of a specific type. These argument types must exactly match the statement/function's defined parameter types or else a type mismatch error is raised.
+The binary program format ensures that every literal value passed to a function as an argument is of a specific type. These argument types must exactly match the function's defined parameter types or else a type mismatch error is raised.
 
-One or more statement/function's arguments may be bound to the return values of a function call. The return value types of the function call must exactly match the parameter types at the positions where the function call is made or else a type mismatch error is raised. The return values are passed as arguments to the parameters in the order the return values are defined in.
+One or more function's arguments may be bound to the return values of a function call. The return value types of the function call must exactly match the parameter types at the positions where the function call is made or else a type mismatch error is raised. The return values are passed as arguments to the parameters in the order the return values are defined in.
 
 ## Standard Library
 | Code | Definition                                               | Description                                                          |
@@ -219,12 +219,22 @@ One or more statement/function's arguments may be bound to the return values of 
 | `2F` | `()`                                                     |                                                                      |
 
 ```
-; jump to offset `n` in program memory (must be a statement)
-(jmp n:u16)
-; jump to offset `n` if `test` != 0
-(jmp-if n:u16 test:u8)
-; TODO: define more...
+;;; Load/store values
+; load a value from data or program memory:
+(ld-u8  ptr:*u8 ):u8
+(ld-u16 ptr:*u16):u16
 
+; store a value in data memory:
+(st-u8  ptr:*u8  val:u8 ):u8
+(st-u16 ptr:*u16 val:u16):u16
+
+;;; List support
+; append a value to a vec in data memory:
+(append-u8  dest:*vec src:u8... ):*vec
+(append-u16 dest:*vec src:u16...):*vec
+(append-vec dest:*vec src:vec...):*vec
+
+;;; Comparisons
 ; compare `a` and `b`
 (eq a:u8  b:u8):u8
 (eq a:u16 b:u16):u8
@@ -244,21 +254,14 @@ One or more statement/function's arguments may be bound to the return values of 
 (ge a:u8  b:u8):u8
 (ge a:u16 b:u16):u8
 
-; TODO: integer arithmetic
+;;; TODO: integer arithmetic
 
-; load a value from data or program memory:
-(ld-u8  ptr:*u8 ):u8
-(ld-u16 ptr:*u16):u16
-
-; store a value in data memory:
-(st-u8  ptr:*u8  val:u8 ):u8
-(st-u16 ptr:*u16 val:u16):u16
-
-
-; append a value to a vec in data memory:
-(append-u8  dest:*vec src:u8... ):*vec
-(append-u16 dest:*vec src:u16...):*vec
-(append-vec dest:*vec src:vec...):*vec
+;;; Control flow:
+; jump to offset `n` in program memory
+(jmp n:u16)
+; jump to offset `n` if `test` != 0
+(jmp-if n:u16 test:u8)
+; TODO: define more...
 
 ; read data from chip memory:
 (chip-read-u8   chip:u8 offs:u16):u8
