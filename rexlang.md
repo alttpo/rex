@@ -16,36 +16,12 @@ Bits are listed from most-significant bit (MSB) to least-significant bit (LSB) f
 
 Alpha characters such as `x` and `y` are treated as groups of bits ordered MSB to LSB that represent an N-bit unsigned integer used for various purposes. The bits the comprise the full integer may cross byte boundaries.
 
-A rexlang program is simply an ordered sequence of `statement-call`s.
+A rexlang program is simply an ordered sequence of `statement`s.
 
-Statement-calls specify a mix of literal typed argument values and function-calls whose return values are used as arguments.
-
-### statement-call formats
-| Format                              | Description                                              |
-| ----------------------------------- | -------------------------------------------------------- |
-| `111xxxxx_0yyyyyyy` [x arg-groups]  | call statement `y` (0..$7F) with `x` (0..$1F) arg-groups |
-
-### arg-group formats
-| Type           | Format                                    | Description                                                                         |
-| -------------- | ----------------------------------------- | ----------------------------------------------------------------------------------- |
-| function-call  | `110xxxxx_0yyyyyyy` [x+1 arg-groups]      | call function `y` (0..$7F) with `x+1` (1..$20) arg-groups, and push return values   |
-| typed values   | `100xbbaa` [x+1 values]                   | push `x+1` (1..$2) values of type `a`, `b` (in order)                               |
-| typed values   | `101000xx_ddccbbaa` [x+1 values]          | push `x+1` (1..$4) values of type `a`, `b`, `c`, `d` (in order)                     |
-| typed values   | `101001xx_ddccbbaa_hhggffee` [x+1 values] | push `x+5` (5..$8) values of type `a`, `b`, `c`, `d`, `e`, `f`, `g`, `h` (in order) |
-| array          | `0txxxxxx` [x+1 values]                   | push `len:u8` `ptr:*t` to array of `x+1` (1..$40) values, all of type `t`           |
-
-An array arg-group pushes to the stack the length of the array (between 1 and $40 bytes) as a `u8` value and then a pointer of type `*t` to the array data in program memory that immediately follows. The allowable types for array values are only `u8` and `u16`. An array may not contain pointer typed values.
-
-### value formats
-| Format              | Description                                    |
-| ------------------- | ---------------------------------------------- |
-| `xxxxxxxx`          | `u8` value                                     |
-| `xxxxxxxx_xxxxxxxx` | `u16` value                                    |
-| `xxxxxxxx_xxxxxxxx` | `*u8` pointer in data memory as a `u16` value  |
-| `xxxxxxxx_xxxxxxxx` | `*u16` pointer in data memory as a `u16` value |
+Statements specify a mix of literal typed argument values and function-calls whose return values are used as arguments.
 
 ### Types
-A type number is a `u2`, a 2-bit unsigned integer, and represents one of four possible types as defined by this table:
+There are only 4 types of values in rexlang. A type number is a `u2`, a 2-bit unsigned integer, and represents one of the four possible types as defined by this table:
 
 | Type  | Name    | Description      | Size (bytes) |
 | ----: | ------- | ---------------- | -----------: |
@@ -54,16 +30,31 @@ A type number is a `u2`, a 2-bit unsigned integer, and represents one of four po
 |   `2` | `*u8`   | pointer to `u8`  |            2 |
 |   `3` | `*u16`  | pointer to `u16` |            2 |
 
-### Arguments
-Statement-calls and function-calls specify the number of `arg-group`s (_not_ the number of arguments) that follow in order to delimit the end of the statement-call/function-call.
+### Statement formats
+| Type            | Format                               | Description                                                                            |
+| --------------- | ------------------------------------ | -------------------------------------------------------------------------------------- |
+| statement-call  | `111xxxxx_0yyyyyyy` [x expressions]  | call function `y` (0..$7F) with `x` (0..$1F) expressions and discard any return values |
 
-An arg-group represents a way to pass one or more typed values as arguments to the statement/function being called.
+### Expression formats
+| Type           | Format                                    | Description                                                                         |
+| -------------- | ----------------------------------------- | ----------------------------------------------------------------------------------- |
+| function-call  | `110xxxxx_0yyyyyyy` [x expressions]       | call function `y` (0..$7F) with `x` (0..$1F) expressions and push return values     |
+| 2-arg-values   | `100xbbaa` [x+1 values]                   | push `x+1` (1..$2) values of type `a`, `b` (in order)                               |
+| 4-arg-values   | `101000xx_ddccbbaa` [x+1 values]          | push `x+1` (1..$4) values of type `a`, `b`, `c`, `d` (in order)                     |
+| 8-arg-values   | `101001xx_ddccbbaa_hhggffee` [x+1 values] | push `x+5` (5..$8) values of type `a`, `b`, `c`, `d`, `e`, `f`, `g`, `h` (in order) |
+| array          | `0txxxxxx` [x+1 values]                   | push `len:u8` `ptr:*t` to array of `x+1` (1..$40) values, all of type `t`           |
 
-A function-call is an arg-group where the return values of the function are passed as arguments to the outer statement/function being called.
+An N-arg-values expression pushes up to N typed argument values where each value has its own type specified.
 
-Otherwise, there are 4 arg-groups which allow for different ways of passing literal typed values as arguments, primarily differing in the number of typed arguments and how the types are specified and/or grouped.
+An array expression pushes on the stack a `u8` value as the length of the array (between 1 and $40 bytes), followed by a `*t` pointer to the array data in program memory that immediately follows. The allowable types for `t` are `u8` and `u16`. An array may not contain pointer typed values.
 
-The total count of arguments passed to a statement/function is the sum of all its arg-groups' argument counts.
+### Value formats
+| Format              | Description                                    |
+| ------------------- | ---------------------------------------------- |
+| `xxxxxxxx`          | `u8` value                                     |
+| `xxxxxxxx_xxxxxxxx` | `u16` value                                    |
+| `xxxxxxxx_xxxxxxxx` | `*u8` pointer in data memory as a `u16` value  |
+| `xxxxxxxx_xxxxxxxx` | `*u16` pointer in data memory as a `u16` value |
 
 ## Memory layout and Pointers
 
@@ -117,7 +108,7 @@ expression:
 
 | Token           | RegEx*                    | Comment |
 | --------------- | ------------------------- | ------- |
-| `identifier`    | `[a-z][0-9a-z_-]*`        | name of an statement or function |
+| `identifier`    | `[a-z][0-9a-z_-]*`        | name of a function |
 | `uint`          | `[0-9A-F]+[uU]?`          | `u8` or `u16` |
 | `array`         | `\$(_*[0-9A-F][0-9A-F])+` | array of `u8` values |
 | `pointer`       | `[0-9A-F]+\*[uU]?`        | pointer 0..$FFFF |
@@ -149,42 +140,25 @@ Named constants are an ASCII-only feature intended to make programs more readabl
 (end)
 ```
 
-## Statements
-Let's define a statement as follows:
-
-    '(' statement-name
-        ( param-name ':' type )*
-        ( param-name ':' type '...' )?
-    ')'
-
-Each parameter has a name and a type.
-
-A variadic parameter is allowed only as the final parameter and it is denoted with a `...` suffix after the type to indicate it accepts zero or more arguments.
-
-Statements return no values and are primarily intended to produce side effects, trigger external behavior, or to affect control flow of the rexlang program.
-
-Since statements do not return values, they cannot be used as arguments to other statements or function calls.
-
 ## Functions
 Let's define a function as follows:
 
     '(' function-name
         ( param-name ':' type )*
         ( param-name ':' type '...' )?
-    ')' ':' '('
-        ( ret-name ':' type )+
     ')'
+    ( ':' '('
+        ( ret-name ':' type )+
+    ')' )?
 
-Each parameter has a name and a type.
+A function may have zero, one, or multiple parameters. Each parameter has a name and a type. The name is only for descriptive purposes.
 
-Each return value has a name and type. There may be multiple return values.
+A function may have zero, one, or multiple return values. Each return value has a name and type. The name is only for descriptive purposes.
 
-A variadic parameter is allowed only as the final parameter and it is denoted with a `...` suffix after the type to indicate it accepts zero or more arguments.
-
-The `':'` separator after the initial closing `)` denotes the function's return values of which there may be more than one.
+The last parameter may be defined as variadic, denoted with a `...` suffix after the type, which accepts zero, one, or multiple arguments, all of the same type.
 
 ## Static Type Safety
-Every statement/function has a well-defined set of typed parameters that it accepts as arguments.
+Every function has a well-defined set of typed parameters that it accepts as arguments.
 
 Arguments are passed to parameters by position in the order that parameters are defined. It is not possible to bypass passing a particular parameter. All parameters must be passed an argument of the same type.
 
@@ -193,6 +167,56 @@ The binary program format ensures that every literal value passed to a statement
 One or more statement/function's arguments may be bound to the return values of a function call. The return value types of the function call must exactly match the parameter types at the positions where the function call is made or else a type mismatch error is raised. The return values are passed as arguments to the parameters in the order the return values are defined in.
 
 ## Standard Library
+| Code | Definition                                               | Description                                                          |
+| ---: | :------------------------------------------------------- | -------------------------------------------------------------------- |
+| `00` | `()`                                                     |                                                                      |
+| `01` | `()`                                                     |                                                                      |
+| `02` | `()`                                                     |                                                                      |
+| `03` | `()`                                                     |                                                                      |
+| `04` | `()`                                                     |                                                                      |
+| `05` | `()`                                                     |                                                                      |
+| `06` | `()`                                                     |                                                                      |
+| `07` | `()`                                                     |                                                                      |
+| `08` | `()`                                                     |                                                                      |
+| `09` | `()`                                                     |                                                                      |
+| `0A` | `()`                                                     |                                                                      |
+| `0B` | `()`                                                     |                                                                      |
+| `0C` | `()`                                                     |                                                                      |
+| `0D` | `()`                                                     |                                                                      |
+| `0E` | `()`                                                     |                                                                      |
+| `0F` | `()`                                                     |                                                                      |
+| `10` | `()`                                                     |                                                                      |
+| `11` | `()`                                                     |                                                                      |
+| `12` | `()`                                                     |                                                                      |
+| `13` | `()`                                                     |                                                                      |
+| `14` | `()`                                                     |                                                                      |
+| `15` | `()`                                                     |                                                                      |
+| `16` | `()`                                                     |                                                                      |
+| `17` | `()`                                                     |                                                                      |
+| `18` | `()`                                                     |                                                                      |
+| `19` | `()`                                                     |                                                                      |
+| `1A` | `()`                                                     |                                                                      |
+| `1B` | `()`                                                     |                                                                      |
+| `1C` | `()`                                                     |                                                                      |
+| `1D` | `()`                                                     |                                                                      |
+| `1E` | `()`                                                     |                                                                      |
+| `1F` | `()`                                                     |                                                                      |
+| `20` | `()`                                                     |                                                                      |
+| `21` | `()`                                                     |                                                                      |
+| `22` | `()`                                                     |                                                                      |
+| `23` | `()`                                                     |                                                                      |
+| `24` | `()`                                                     |                                                                      |
+| `25` | `()`                                                     |                                                                      |
+| `26` | `()`                                                     |                                                                      |
+| `27` | `()`                                                     |                                                                      |
+| `28` | `()`                                                     |                                                                      |
+| `29` | `()`                                                     |                                                                      |
+| `2A` | `()`                                                     |                                                                      |
+| `2B` | `()`                                                     |                                                                      |
+| `2C` | `()`                                                     |                                                                      |
+| `2D` | `()`                                                     |                                                                      |
+| `2E` | `()`                                                     |                                                                      |
+| `2F` | `()`                                                     |                                                                      |
 
 ```
 ; jump to offset `n` in program memory (must be a statement)
