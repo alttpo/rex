@@ -1,6 +1,8 @@
 # Rexlang
 Rexlang is a statically typed, integer-based programming language optimized for embedded applications with tight memory constraints.
 
+Rexlang is designed to allow applications to generate and upload rexlang programs to an embedded system which executes them with very low latency access to critical functions such as memory I/O or interfacing with hardware. The rexlang program running in the embedded system may then write messages back to the host-side application to report data.
+
 ## Binary program format
 The rexlang binary program format is a compact and machine-friendly representation of a program as it appears in program memory.
 
@@ -30,23 +32,28 @@ There are only 4 types of values in rexlang. A type number is a `u2`, a 2-bit un
 |   `2` | `*u8`   | pointer to `u8`  |            2 |
 |   `3` | `*u16`  | pointer to `u16` |            2 |
 
-### Statement formats
-| Type            | Format                               | Description                                                                            |
-| --------------- | ------------------------------------ | -------------------------------------------------------------------------------------- |
-| statement-call  | `111xxxxx_0yyyyyyy` [x expressions]  | call function `y` (0..$7F) with `x` (0..$1F) expressions and discard any return values |
+### Instructions
+| Type              | Format                                    | Description                                                                         |
+| ----------------- | ----------------------------------------- | ----------------------------------------------------------------------------------- |
+| prepare-invoke    | `111xxxxx_0yyyyyyy`                       | prepare to invoke function `y` (0..$7F) with `x` (0..$1F) arguments                 |
+| invoke-function   | `11000000`                                | invoke last prepared function; push return values                                   |
+| invoke-statement  | `11000001`                                | invoke last prepared function; discard return values                                |
+| push-2-arg-values | `100xbbaa` [x+1 values]                   | push `x+1` (1..$2) values of type `a`, `b` (in order)                               |
+| push-4-arg-values | `101000xx_ddccbbaa` [x+1 values]          | push `x+1` (1..$4) values of type `a`, `b`, `c`, `d` (in order)                     |
+| push-8-arg-values | `101001xx_ddccbbaa_hhggffee` [x+5 values] | push `x+5` (5..$8) values of type `a`, `b`, `c`, `d`, `e`, `f`, `g`, `h` (in order) |
+| push-array-ptr    | `0txxxxxx` [x+1 values]                   | push `len:u8` `ptr:*t` to array of `x+1` (1..$40) values, all of type `t`           |
 
-### Expression formats
-| Type           | Format                                    | Description                                                                         |
-| -------------- | ----------------------------------------- | ----------------------------------------------------------------------------------- |
-| function-call  | `110xxxxx_0yyyyyyy` [x expressions]       | call function `y` (0..$7F) with `x` (0..$1F) expressions and push return values     |
-| 2-arg-values   | `100xbbaa` [x+1 values]                   | push `x+1` (1..$2) values of type `a`, `b` (in order)                               |
-| 4-arg-values   | `101000xx_ddccbbaa` [x+1 values]          | push `x+1` (1..$4) values of type `a`, `b`, `c`, `d` (in order)                     |
-| 8-arg-values   | `101001xx_ddccbbaa_hhggffee` [x+1 values] | push `x+5` (5..$8) values of type `a`, `b`, `c`, `d`, `e`, `f`, `g`, `h` (in order) |
-| array          | `0txxxxxx` [x+1 values]                   | push `len:u8` `ptr:*t` to array of `x+1` (1..$40) values, all of type `t`           |
+A prepare-invoke instruction prepares the VM for passing arguments to the given function and saves any previous function preparation to the stack.
 
-An N-arg-values expression pushes up to N typed argument values where each value has its own type specified.
+An invoke-function instruction executes the most recently prepared function, popping its arguments off the stack; the previous function preparation is popped off the stack and any return values are pushed on to the stack.
 
-An array expression pushes on the stack a `u8` value as the length of the array (between 1 and $40 bytes), followed by a `*t` pointer to the array data in program memory that immediately follows. The allowable types for `t` are `u8` and `u16`. An array may not contain pointer typed values.
+An invoke-statement instruction executes the most recently prepared function with its arguments and discards its return values.
+
+A push-N-arg-values instruction pushes between 1 and N typed argument values on the stack where each value has its own type specified.
+
+A push-array instruction pushes on the stack a `u8` value with the length of the array (between 1 and $40 bytes), followed by a `*t` pointer to the array data in program memory that immediately follows. The allowable types for `t` are `u8` and `u16`. An array may not contain pointer typed values.
+
+On every push to the stack, the type of value pushed is checked against the currently prepared function's parameter type.
 
 ### Value formats
 | Format              | Description                                    |
