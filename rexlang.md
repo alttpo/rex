@@ -18,50 +18,26 @@ Bits are listed from most-significant bit (MSB) to least-significant bit (LSB) f
 
 Alpha characters such as `x` and `y` are treated as groups of bits ordered MSB to LSB that represent an N-bit unsigned integer used for various purposes. The bits the comprise the full integer may cross byte boundaries.
 
-A rexlang program is simply an ordered sequence of `statement`s.
-
-Statements specify a mix of literal typed argument values and function-calls whose return values are used as arguments.
-
-### Types
-There are only 4 types of values in rexlang. A type number is a `u2`, a 2-bit unsigned integer, and represents one of the four possible types as defined by this table:
-
-| Type  | Name    | Description      | Size (bytes) |
-| ----: | ------- | ---------------- | -----------: |
-|   `0` | `u8`    |  8-bit uint      |            1 |
-|   `1` | `u16`   | 16-bit uint      |            2 |
-|   `2` | `*u8`   | pointer to `u8`  |            2 |
-|   `3` | `*u16`  | pointer to `u16` |            2 |
-
 ### Instructions
-| Type              | Format                                    | Description                                                                         |
-| ----------------- | ----------------------------------------- | ----------------------------------------------------------------------------------- |
-| prepare-invoke    | `111xxxxx_0yyyyyyy`                       | prepare to invoke function `y` (0..$7F) with `x` (0..$1F) arguments                 |
-| invoke-function   | `11000000`                                | invoke last prepared function; push return values                                   |
-| invoke-statement  | `11000001`                                | invoke last prepared function; discard return values                                |
-| push-2-arg-values | `100xbbaa` [x+1 values]                   | push `x+1` (1..$2) values of type `a`, `b` (in order)                               |
-| push-4-arg-values | `101000xx_ddccbbaa` [x+1 values]          | push `x+1` (1..$4) values of type `a`, `b`, `c`, `d` (in order)                     |
-| push-8-arg-values | `101001xx_ddccbbaa_hhggffee` [x+5 values] | push `x+5` (5..$8) values of type `a`, `b`, `c`, `d`, `e`, `f`, `g`, `h` (in order) |
-| push-array-ptr    | `0txxxxxx` [x+1 values]                   | push `len:u8` `ptr:*t` to array of `x+1` (1..$40) values, all of type `t`           |
+| Type               | Format                                    | Description                                                          |
+| ------------------ | ----------------------------------------- | -------------------------------------------------------------------- |
+| invoke-function    | `011xxxxx_0yyyyyyy`                       | prepare to invoke function `y` (0..$7F) with `x` (0..$1F) arguments  |
+| push-4-arg-values  | `00xxdcba` [x+1 values]                   | push `x+1` (1..$4) values of sizes (`a`..`d` `u8`/`u16`)             |
+| push-8-arg-values  | `010001xx_hgfedcba` [x+5 values]          | push `x+5` (5..$8) values of sizes (`a`..`h` `u8`/`u16`)             |
+| push-16-arg-values | `01001xxx_hgfedcba_ponmlkji` [x+9 values] | push `x+9` (9..$10) values of sizes (`a`..`p` `u8`/`u16`)            |
+| push-array-ptr     | `10xxxxxx` [x+1 `u8` values]              | push `len:u8` `ptr:*u8` to array of `x+1` (1..$40) `u8` values       |
 
-A prepare-invoke instruction prepares the VM for passing arguments to the given function and saves any previous function preparation to the stack.
-
-An invoke-function instruction executes the most recently prepared function, popping its arguments off the stack; the previous function preparation is popped off the stack and any return values are pushed on to the stack.
-
-An invoke-statement instruction executes the most recently prepared function with its arguments and discards its return values.
+The `invoke-function` instruction prepares the VM for executing the given function by pushing the previous F value to the stack, setting F to the location of the instruction, and then waiting until the number of arguments specified is pushed onto the stack.
 
 A push-N-arg-values instruction pushes between 1 and N typed argument values on the stack where each value has its own type specified.
 
-A push-array instruction pushes on the stack a `u8` value with the length of the array (between 1 and $40 bytes), followed by a `*t` pointer to the array data in program memory that immediately follows. The allowable types for `t` are `u8` and `u16`. An array may not contain pointer typed values.
-
-On every push to the stack, the type of value pushed is checked against the currently prepared function's parameter type.
+A push-array instruction pushes on the stack a `u8` value with the length of the array (between 1 and $40 bytes), followed by a `*u8` pointer to the array data in program memory that immediately follows.
 
 ### Value formats
 | Format              | Description                                    |
 | ------------------- | ---------------------------------------------- |
 | `xxxxxxxx`          | `u8` value                                     |
 | `xxxxxxxx_xxxxxxxx` | `u16` value                                    |
-| `xxxxxxxx_xxxxxxxx` | `*u8` pointer in data memory as a `u16` value  |
-| `xxxxxxxx_xxxxxxxx` | `*u16` pointer in data memory as a `u16` value |
 
 ## Memory layout and Pointers
 
@@ -116,33 +92,31 @@ expression:
 | Token           | RegEx*                    | Comment |
 | --------------- | ------------------------- | ------- |
 | `identifier`    | `[a-z][0-9a-z_-]*`        | name of a function |
-| `uint`          | `[0-9A-F]+[uU]?`          | `u8` or `u16` |
+| `uint`          | `[0-9A-F]+`               | `u16` |
 | `array`         | `\$(_*[0-9A-F][0-9A-F])+` | array of `u8` values |
-| `pointer`       | `[0-9A-F]+\*[uU]?`        | pointer 0..$FFFF |
-| `named-constant`| `{[0-9a-zA-Z_-\/]+}[uU]?` | compile-time lookup by name |
+| `pointer`       | `&[0-9A-F]+`              | pointer 0..$FFFF |
+| `named-constant`| `{[0-9a-zA-Z_-\/]+}`      | compile-time lookup by name |
 
 *The rexlang VM implementation does not use regular expressions (RegEx) for parsing the language; the syntax is convenient for documentation purposes.
 
 Comments are discarded during translation into the binary representation.
-
-The `[uU]` suffix denotes which type the value is. The `u` suffix and an absent suffix denote `u8`, and a `U` suffix denotes `u16`.
 
 Named constants are an ASCII-only feature intended to make programs more readable by giving names to common values. When a named-constant is encountered in rexlang ASCII representation, the compiler looks it up by its name in a table of known constants and replaces it with its equivalent typed value.
 
 ## Example program
 ```
 ; declare context 0 with program=$40 bytes, stack=$20 bytes, data=$15 bytes
-(ctx-new 0 40U 20U 15U)
+(ctx-new 0 40 20 15)
 ; begin entering instructions into program memory of context 0
 (begin)
     ; read the first byte from "NMI-EXE" chip memory and if it's not zero then return
-    (jmp-if 0U (ne 0 (chip-read-u8 {NMI-EXE} 0U)))
-    (chip-write {NMI-EXE} 0U $9C002C_6CEAFF)
+    (jmp-if 0 (ne 0 (chip-read-u8 {NMI-EXE} 0)))
+    (chip-write {NMI-EXE} 0 $9C002C_6CEAFF)
     ; read $10 bytes from "WRAM" chip memory into data memory at 0
-    (chip-read {WRAM} 10U 0*)
+    (chip-read {WRAM} 10 &0)
     ; write the $10 bytes from data memory to the response
-    (rsp-write 10U 0*)
-    (jmp 0U)
+    (rsp-write 10 &0)
+    (jmp 0)
 ; end entering instructions and begin execution
 (end)
 ```
