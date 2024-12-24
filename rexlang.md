@@ -16,20 +16,22 @@ Bits are listed from most-significant bit (MSB) to least-significant bit (LSB) f
 
 `0`s and `1`s are literal bits required to be set or cleared for the row's pattern to match.
 
-Alpha characters such as `x` and `y` are treated as groups of bits ordered MSB to LSB that represent an N-bit unsigned integer used for various purposes. The bits the comprise the full integer may cross byte boundaries.
+Alpha characters such as `x` and `y` are treated as groups of bits ordered MSB to LSB that represent an N-bit unsigned integer used for various purposes. The bits that comprise the full integer may cross byte boundaries.
 
 ### Instructions
-| Type               | Format                                    | Description                                                          |
-| ------------------ | ----------------------------------------- | -------------------------------------------------------------------- |
-| invoke-function    | `011xxxxx_0yyyyyyy`                       | prepare to invoke function `y` (0..$7F) with `x` (0..$1F) arguments  |
-| push-4-arg-values  | `00xxdcba` [x+1 values]                   | push `x+1` (1..$4) values of sizes (`a`..`d` `u8`/`u16`)             |
-| push-8-arg-values  | `010001xx_hgfedcba` [x+5 values]          | push `x+5` (5..$8) values of sizes (`a`..`h` `u8`/`u16`)             |
-| push-16-arg-values | `01001xxx_hgfedcba_ponmlkji` [x+9 values] | push `x+9` (9..$10) values of sizes (`a`..`p` `u8`/`u16`)            |
-| push-array-ptr     | `10xxxxxx` [x+1 `u8` values]              | push `len:u8` `ptr:*u8` to array of `x+1` (1..$40) `u8` values       |
+| Type               | Format                                    | Description                                                     |
+| ------------------ | ----------------------------------------- | --------------------------------------------------------------- |
+| invoke-function    | `01111111_0aaaaaaa`                       | invoke function `a`  (  0..  $7F)                               |
+| invoke-function    | `01111111_1aaaaaaa_0aaaaaaa`              | invoke function `a`  ($80..$3FFF)                               |
+| opcode             | `11xxxxxx`                                | invoke opcode `x`    (  0..  $3F)                               |
+| push-4-arg-values  | `00xxdcba` [x+1 values]                   | push `x+1` ( 1..$4) values of sizes (`a`..`d` `u8`/`u16`)       |
+| push-8-arg-values  | `010001xx_hgfedcba` [x+5 values]          | push `x+5` ( 5..$8) values of sizes (`a`..`h` `u8`/`u16`)       |
+| push-16-arg-values | `01001xxx_hgfedcba_ponmlkji` [x+9 values] | push `x+9` (9..$10) values of sizes (`a`..`p` `u8`/`u16`)       |
+| push-array-ptr     | `10xxxxxx` [x+1 `u8` values]              | push `len:u8`, `ptr:*u8` to array of `x+1` (1..$40) `u8` values |
 
-The `invoke-function` instruction prepares the VM for executing the given function by pushing the previous F value to the stack, setting F to the location of the instruction, and then waiting until the number of arguments specified is pushed onto the stack.
+The `invoke-function` instruction executes the given function.
 
-A push-N-arg-values instruction pushes between 1 and N typed argument values on the stack where each value has its own type specified.
+A push-N-arg-values instruction pushes between 1 and N typed argument values on the stack where each value has its own type specified as `0` for `u8` or `1` for `u16`.
 
 A push-array instruction pushes on the stack a `u8` value with the length of the array (between 1 and $40 bytes), followed by a `*u8` pointer to the array data in program memory that immediately follows.
 
@@ -38,6 +40,29 @@ A push-array instruction pushes on the stack a `u8` value with the length of the
 | ------------------- | ---------------------------------------------- |
 | `xxxxxxxx`          | `u8` value                                     |
 | `xxxxxxxx_xxxxxxxx` | `u16` value                                    |
+
+### Opcodes
+| Format   | Name      | Arg1 | Arg2 | Result |
+| -------- | --------- | ---- | ---- | ------ |
+| `000000` | load-u8   | ptr  |      | u8     |
+| `000001` | load-u16  | ptr  |      | u16    |
+| `000010` | store-u8  | ptr  | val  |        |
+| `000011` | store-u16 | ptr  | val  |        |
+| `000100` | eq        | a    | b    | bool   |
+| `000101` | ne        | a    | b    | bool   |
+| `000110` | le        | a    | b    | bool   |
+| `000111` | gt        | a    | b    | bool   |
+| `001000` | lt        | a    | b    | bool   |
+| `001001` | ge        | a    | b    | bool   |
+| `001010` | and       | a    | b    | u16    |
+| `001011` | or        | a    | b    | u16    |
+| `001100` | xor       | a    | b    | u16    |
+| `001101` | comp      | a    |      | u16    |
+| `001110` | shl       | a    | bits | u16    |
+| `001111` | shr       | a    | bits | u16    |
+| `010000` | add       | a    | b    | u16    |
+| `010001` | sub       | a    | b    | u16    |
+| `010010` |           |      |      |        |
 
 ## Memory layout and Pointers
 
@@ -62,6 +87,9 @@ Pointers point to memory addresses within the current context and are represente
 Pointers may point to addresses in either data memory or program memory.
 
 An out of bounds memory access (via pointer) will raise an error and the program will be halted.
+
+## Stack behavior
+The stack contains only `u16` values.
 
 ## ASCII program format
 ```
@@ -200,42 +228,11 @@ One or more function's arguments may be bound to the return values of a function
 | `2F` | `()`                                                     |                                                                      |
 
 ```
-;;; Load/store values
-; load a value from data or program memory:
-(ld-u8  ptr:*u8 ):u8
-(ld-u16 ptr:*u16):u16
-
-; store a value in data memory:
-(st-u8  ptr:*u8  val:u8 ):u8
-(st-u16 ptr:*u16 val:u16):u16
-
 ;;; List support
 ; append a value to a vec in data memory:
 (append-u8  dest:*vec src:u8... ):*vec
 (append-u16 dest:*vec src:u16...):*vec
 (append-vec dest:*vec src:vec...):*vec
-
-;;; Comparisons
-; compare `a` and `b`
-(eq a:u8  b:u8):u8
-(eq a:u16 b:u16):u8
-
-(ne a:u8  b:u8):u8
-(ne a:u16 b:u16):u8
-
-(lt a:u8  b:u8):u8
-(lt a:u16 b:u16):u8
-
-(le a:u8  b:u8):u8
-(le a:u16 b:u16):u8
-
-(gt a:u8  b:u8):u8
-(gt a:u16 b:u16):u8
-
-(ge a:u8  b:u8):u8
-(ge a:u16 b:u16):u8
-
-;;; TODO: integer arithmetic
 
 ;;; Control flow:
 ; jump to offset `n` in program memory
