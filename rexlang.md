@@ -3,8 +3,24 @@ Rexlang is a statically typed, integer-based programming language optimized for 
 
 Rexlang is designed to allow applications to generate and upload rexlang programs to an embedded system which executes them with very low latency access to critical functions such as memory I/O or interfacing with hardware. The rexlang program running in the embedded system may then write messages back to the host-side application to report data.
 
-## Memory layout
+## Virtual machine
+The virtual machine uses a minimal set of native state variables to keep track of execution state:
 
+  1. `IP`: Instruction Pointer
+  2. `SP`: Stack Pointer
+
+These state variables are not directly accessible by rexlang programs and are implementation details of the virtual machine.
+
+## Data Types
+Rexlang uses only `u8` and `u16` types for primitive values.
+
+Pointer types `*T` are only defined for documentation purposes; the VM only deals with `u16` raw pointer values.
+
+`vec` type is `len:u8, data:*u8`.
+
+All pushes to the stack must record the primitive type of the value pushed. When a value is popped off the stack, its type must be checked against the parameter type it is used in. For example, it is not possible to push a `u16` value to the stack and pop it as a `u8` value or vice versa. If this were allowed it would cause the next stack pop operation to be unaligned and could lead to corrupted results or unpredictable execution behavior.
+
+## Memory layout
 Memory used for rexlang programs is stored in a context. A context is a contiguous array of bytes stored in RAM. A context allocation will fail with an error if there is no more memory available. Contexts are divided into 3 sections stored in the following order:
 
   1. data memory
@@ -19,14 +35,7 @@ These memory sections are subject to the following rules:
 
 Any violation of the above rules will raise an error and the program will be halted.
 
-Pointers point to memory addresses within the current context and are represented as `u16` values.
-
-Pointers may point to addresses in either data memory or program memory.
-
 An out of bounds memory access (via pointer) will raise an error and the program will be halted.
-
-## Stack behavior
-The stack contains only `u16` values.
 
 ## Binary program format
 The rexlang binary program format is a compact and machine-friendly representation of a program as it appears in program memory.
@@ -46,22 +55,22 @@ Alpha characters are treated as bits that represent an N-bit unsigned integer or
 ### Instructions
 | Type                 | Format                                    | Description                                                     |
 | -------------------- | ----------------------------------------- | --------------------------------------------------------------- |
-| push-4-mixed-values  | `00dcbaxx` [x+1 values]                   | push `x+1` ( 1..$4) values of mixed sizes (`a`..`d`=`u8`/`u16`) |
-| push-8-mixed-values  | `010001xx_hgfedcba` [x+5 values]          | push `x+5` ( 5..$8) values of mixed sizes (`a`..`h`=`u8`/`u16`) |
-| push-16-mixed-values | `01001xxx_hgfedcba_ponmlkji` [x+9 values] | push `x+9` (9..$10) values of mixed sizes (`a`..`p`=`u8`/`u16`) |
-| push-16-u8-values    | `0110xxxx` [x+1 values]                   | push `x+1` (1..$10) u8 values                                   |
-| push-16-u16-values   | `0111xxxx` [x+1 values]                   | push `x+1` (1..$10) u16 values                                  |
-| push-array           | `10xxxxxx` [x+1 `u8` values]              | push `len`, `ptr` to array of `x+1` (1..$40) `u8` values        |
-| invoke-function      | `11111110_0aaaaaaa`                       | invoke function `a`   (  0..  $7F)                              |
-| invoke-function-ext  | `11111110_1aaaaaaa_0aaaaaaa`              | invoke function `a`   ($80..$3FFF)                              |
-| opcode               | `11xxxxxx`                                | invoke opcode `x`     (  0..  $3F)                              |
-| opcode-ext           | `11111111_0xxxxxxx`                       | invoke opcode `x+$40` ($40..  $BF)                              |
+| invoke-function      | `00111110_0aaaaaaa`                       | invoke function `a`   (  0..  $7F)                              |
+| invoke-function-ext  | `00111110_1aaaaaaa_0aaaaaaa`              | invoke function `a`   ($80..$3FFF)                              |
+| opcode-ext           | `00111111_0xxxxxxx`                       | invoke opcode `x+$40` ($40..  $BF)                              |
+| opcode               | `00xxxxxx`                                | invoke opcode `x`     (  0..  $3D)                              |
+| push-array           | `01xxxxxx` [x+1 `u8` values]              | push `len`, `ptr` to array of `x+1` (1..$40) `u8` values        |
+| push-4-mixed-values  | `10dcbaxx` [x+1 values]                   | push `x+1` ( 1..$4) values of mixed sizes (`a`..`d`=`u8`/`u16`) |
+| push-8-mixed-values  | `110001xx_hgfedcba` [x+5 values]          | push `x+5` ( 5..$8) values of mixed sizes (`a`..`h`=`u8`/`u16`) |
+| push-16-mixed-values | `11001xxx_hgfedcba_ponmlkji` [x+9 values] | push `x+9` (9..$10) values of mixed sizes (`a`..`p`=`u8`/`u16`) |
+| push-16-u8-values    | `1110xxxx` [x+1 `u8` values]              | push `x+1` (1..$10) `u8` values                                 |
+| push-16-u16-values   | `1111xxxx` [x+1 `u16` values]             | push `x+1` (1..$10) `u16` values                                |
 
 The `invoke-function` instruction executes the given function.
 
-A push-N-mixed-values instruction pushes between 1 and N mixed sized argument values on the stack where each value has its own sized specified as `0` for `u8` or `1` for `u16`. All values are converted to `u16` on the stack.
+A push-N-mixed-values instruction pushes between 1 and N mixed sized argument values on the stack where each value has its own sized specified as `0` for `u8` or `1` for `u16`.
 
-A push-array instruction pushes on the stack a `u16` value with the length of the array (between 1 and $40 bytes), followed by a `u16` pointer to the array data in program memory that immediately follows.
+A push-array instruction pushes on the stack a `u8` value with the length of the array (between 1 and $40 bytes), followed by a `*u8` pointer to the array data in program memory that immediately follows.
 
 ### Value formats
 | Format              | Description |
@@ -70,124 +79,93 @@ A push-array instruction pushes on the stack a `u16` value with the length of th
 | `xxxxxxxx_xxxxxxxx` | `u16` value |
 
 ### Opcodes
-| Format   | Name      | Arg1 | Arg2 | Result                      |
-| -------- | --------- | ---- | ---- | --------------------------- |
-| `000000` | eq        | a    | b    | `a == b`                    |
-| `000001` | ne        | a    | b    | `a != b`                    |
-| `000010` | le        | a    | b    | `a <= b`                    |
-| `000011` | gt        | a    | b    | `a  > b`                    |
-| `000100` | lt        | a    | b    | `a <  b`                    |
-| `000101` | ge        | a    | b    | `a >= b`                    |
-| `000110` | and       | a    | b    | `a & b`                     |
-| `000111` | or        | a    | b    | `a \| b`                    |
-| `001000` | xor       | a    | b    | `a ^ b`                     |
-| `001001` | shl       | a    | bits | `a << b`                    |
-| `001010` | shr       | a    | bits | `a >> b`                    |
-| `001011` | not       | a    |      | `!a`                        |
-| `001100` | add       | a    | b    | `a + b`                     |
-| `001101` | sub       | a    | b    | `a - b`                     |
-| `001110` |           |      |      |                             |
-| `001111` |           |      |      |                             |
-| `010000` |           |      |      |                             |
-| `010001` |           |      |      |                             |
-| `010010` |           |      |      |                             |
-| `010011` |           |      |      |                             |
-| `010100` |           |      |      |                             |
-| `010101` |           |      |      |                             |
-| `010110` |           |      |      |                             |
-| `010111` |           |      |      |                             |
-| `011000` |           |      |      |                             |
-| `011001` |           |      |      |                             |
-| `011010` |           |      |      |                             |
-| `011011` |           |      |      |                             |
-| `011100` |           |      |      |                             |
-| `011101` |           |      |      |                             |
-| `011110` |           |      |      |                             |
-| `011111` |           |      |      |                             |
-| `100000` | load-u8   | ptr  |      | u8                          |
-| `100001` | load-u16  | ptr  |      | u16                         |
-| `100010` | store-u8  | ptr  | val  |                             |
-| `100011` | store-u16 | ptr  | val  |                             |
-| `100100` |           |      |      |                             |
-| `100101` |           |      |      |                             |
-| `100110` |           |      |      |                             |
-| `100111` |           |      |      |                             |
-| `101000` |           |      |      |                             |
-| `101001` |           |      |      |                             |
-| `101010` |           |      |      |                             |
-| `101011` |           |      |      |                             |
-| `101100` |           |      |      |                             |
-| `101101` |           |      |      |                             |
-| `101110` |           |      |      |                             |
-| `101111` |           |      |      |                             |
-| `110000` |           |      |      |                             |
-| `110001` |           |      |      |                             |
-| `110010` |           |      |      |                             |
-| `110011` |           |      |      |                             |
-| `110100` |           |      |      |                             |
-| `110101` |           |      |      |                             |
-| `110110` |           |      |      |                             |
-| `110111` |           |      |      |                             |
-| `111000` |           |      |      |                             |
-| `111001` |           |      |      |                             |
-| `111010` |           |      |      |                             |
-| `111011` |           |      |      |                             |
-| `111100` | jmp       | ptr  |      | jump to ptr                 |
-| `111101` | jmp-if    | ptr  | test | jump to ptr if test is true |
-| `111110` | function  |      |      |                             |
-| `111111` | extended  |      |      |                             |
+| Format   | Name           | a type | b type | c type | result type | result value           |
+| -------- | -------------- | ------ | ------ | ------ | ----------- | ---------------------- |
+| `000000` | return         |        |        |        |             | pop IP                 |
+| `000001` | call           | u16    |        |        |             | push IP; IP=a          |
+| `000010` | jump           | u16    |        |        |             | IP=a                   |
+| `000011` | jump-if        | u16    | u8     |        |             | IP=a if b != 0         |
+| `000100` | discard        | a      |        |        |             | discards popped value  |
+| `000101` |                |        |        |        |             |                        |
+| `000110` |                |        |        |        |             |                        |
+| `000111` |                |        |        |        |             |                        |
+| `001000` | eq             | a      | b      |        | u8          | `a == b`               |
+| `001001` | ne             | a      | b      |        | u8          | `a != b`               |
+| `001010` | le             | a      | b      |        | u8          | `a <= b`               |
+| `001011` | gt             | a      | b      |        | u8          | `a >  b`               |
+| `001100` | lt             | a      | b      |        | u8          | `a <  b`               |
+| `001101` | ge             | a      | b      |        | u8          | `a >= b`               |
+| `001110` | and            | a      | b      |        | max         | `a &  b`               |
+| `001111` | or             | a      | b      |        | max         | `a \| b`               |
+| `010000` | xor            | a      | b      |        | max         | `a ^  b`               |
+| `010001` | not            | a      | -      |        | a           | `!a`                   |
+| `010010` | shl            | a      | u8     |        | a           | `a << b`               |
+| `010011` | shr            | a      | u8     |        | a           | `a >> b`               |
+| `010100` | add            | a      | b      |        | max         | `a +  b`               |
+| `010101` | sub            | a      | b      |        | max         | `a -  b`               |
+| `010110` | mul            | a      | b      |        | max         | `a *  b`               |
+| `010111` |                |        |        |        |             |                        |
+| `011000` | inc            | a      | -      |        | a           | `a++`                  |
+| `011001` | dec            | a      | -      |        | a           | `a--`                  |
+| `011010` | inc-u8         | *u8    | -      |        | u8          | `*( u8*)(&D[a])++`     |
+| `011011` | inc-u16        | *u16   | -      |        | u16         | `*(u16*)(&D[a])++`     |
+| `011100` | dec-u8         | *u8    | -      |        | u8          | `*( u8*)(&D[a])--`     |
+| `011101` | dec-u16        | *u16   | -      |        | u16         | `*(u16*)(&D[a])--`     |
+| `011110` | conv-u8        | u16    | -      |        | u8          | `(u8)(a & 0xFF)`       |
+| `011111` | conv-u16       | u8     | -      |        | u16         | `(u16)a`               |
+| `100000` | load-u8        | *u8    | -      |        | u8          | `*( u8*)(&D[a])`       |
+| `100001` | load-u16       | *u16   | -      |        | u16         | `*(u16*)(&D[a])`       |
+| `100010` | load-u8-offs   | *u8    | u16    |        | u8          | `*( u8*)(&D[a+b])`     |
+| `100011` | load-u16-offs  | *u16   | u16    |        | u16         | `*(u16*)(&D[a+b])`     |
+| `100100` | store-u8       | *u8    | u8     |        | u8          | `*( u8*)(&D[a]) = b`   |
+| `100101` | store-u16      | *u16   | u16    |        | u16         | `*(u16*)(&D[a]) = b`   |
+| `100110` | store-u8-offs  | *u8    | u16    | u8     | u8          | `*( u8*)(&D[a+b]) = c` |
+| `100111` | store-u16-offs | *u16   | u16    | u16    | u16         | `*(u16*)(&D[a+b]) = c` |
+| `101000` |                |        |        |        |             |                        |
+| `101001` |                |        |        |        |             |                        |
+| `101010` |                |        |        |        |             |                        |
+| `101011` |                |        |        |        |             |                        |
+| `101100` |                |        |        |        |             |                        |
+| `101101` |                |        |        |        |             |                        |
+| `101110` |                |        |        |        |             |                        |
+| `101111` |                |        |        |        |             |                        |
+| `110000` |                |        |        |        |             |                        |
+| `110001` |                |        |        |        |             |                        |
+| `110010` |                |        |        |        |             |                        |
+| `110011` |                |        |        |        |             |                        |
+| `110100` |                |        |        |        |             |                        |
+| `110101` |                |        |        |        |             |                        |
+| `110110` |                |        |        |        |             |                        |
+| `110111` |                |        |        |        |             |                        |
+| `111000` |                |        |        |        |             |                        |
+| `111001` |                |        |        |        |             |                        |
+| `111010` |                |        |        |        |             |                        |
+| `111011` |                |        |        |        |             |                        |
+| `111100` |                |        |        |        |             |                        |
+| `111101` |                |        |        |        |             |                        |
+| `111110` | function       |        |        |        |             |                        |
+| `111111` | extended       |        |        |        |             |                        |
 
 ## Standard Function Library
-| Code | Definition                                               | Description                                                          |
-| ---: | :------------------------------------------------------- | -------------------------------------------------------------------- |
-| `00` | `()`                                                     |                                                                      |
-| `01` | `()`                                                     |                                                                      |
-| `02` | `()`                                                     |                                                                      |
-| `03` | `()`                                                     |                                                                      |
-| `04` | `()`                                                     |                                                                      |
-| `05` | `()`                                                     |                                                                      |
-| `06` | `()`                                                     |                                                                      |
-| `07` | `()`                                                     |                                                                      |
-| `08` | `()`                                                     |                                                                      |
-| `09` | `()`                                                     |                                                                      |
-| `0A` | `()`                                                     |                                                                      |
-| `0B` | `()`                                                     |                                                                      |
-| `0C` | `()`                                                     |                                                                      |
-| `0D` | `()`                                                     |                                                                      |
-| `0E` | `()`                                                     |                                                                      |
-| `0F` | `()`                                                     |                                                                      |
-| `10` | `()`                                                     |                                                                      |
-| `11` | `()`                                                     |                                                                      |
-| `12` | `()`                                                     |                                                                      |
-| `13` | `()`                                                     |                                                                      |
-| `14` | `()`                                                     |                                                                      |
-| `15` | `()`                                                     |                                                                      |
-| `16` | `()`                                                     |                                                                      |
-| `17` | `()`                                                     |                                                                      |
-| `18` | `()`                                                     |                                                                      |
-| `19` | `()`                                                     |                                                                      |
-| `1A` | `()`                                                     |                                                                      |
-| `1B` | `()`                                                     |                                                                      |
-| `1C` | `()`                                                     |                                                                      |
-| `1D` | `()`                                                     |                                                                      |
-| `1E` | `()`                                                     |                                                                      |
-| `1F` | `()`                                                     |                                                                      |
-| `20` | `()`                                                     |                                                                      |
-| `21` | `()`                                                     |                                                                      |
-| `22` | `()`                                                     |                                                                      |
-| `23` | `()`                                                     |                                                                      |
-| `24` | `()`                                                     |                                                                      |
-| `25` | `()`                                                     |                                                                      |
-| `26` | `()`                                                     |                                                                      |
-| `27` | `()`                                                     |                                                                      |
-| `28` | `()`                                                     |                                                                      |
-| `29` | `()`                                                     |                                                                      |
-| `2A` | `()`                                                     |                                                                      |
-| `2B` | `()`                                                     |                                                                      |
-| `2C` | `()`                                                     |                                                                      |
-| `2D` | `()`                                                     |                                                                      |
-| `2E` | `()`                                                     |                                                                      |
-| `2F` | `()`                                                     |                                                                      |
+| Code | Definition                      | Description                            |
+| ---: | :------------------------------ | -------------------------------------- |
+| `00` | `(exit)`                        |                                        |
+| `01` | `(vec-len        *vec):u16`     |                                        |
+| `02` | `(vec-reset      *vec)`         |                                        |
+| `03` | `(vec-append-vec *vec vec)`     |                                        |
+| `04` | `(vec-append-u8  *vec  u8):u8 ` | `*( u8*)(&D[a+1+D[a]]) = b; D[a] += 1` |
+| `05` | `(vec-append-u16 *vec u16):u16` | `*(u16*)(&D[a+1+D[a]]) = b; D[a] += 2` |
+| `06` | `()`                            |                                        |
+| `07` | `()`                            |                                        |
+| `08` | `()`                            |                                        |
+| `09` | `()`                            |                                        |
+| `0A` | `()`                            |                                        |
+| `0B` | `()`                            |                                        |
+| `0C` | `()`                            |                                        |
+| `0D` | `()`                            |                                        |
+| `0E` | `()`                            |                                        |
+| `0F` | `()`                            |                                        |
+
 
 ```
 ; read data from chip memory:
