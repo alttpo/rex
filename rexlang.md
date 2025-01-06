@@ -21,7 +21,7 @@ Pointer types `*T` are only defined for documentation purposes; the VM only deal
 All pushes to the stack must record the primitive type of the value pushed. When a value is popped off the stack, its type must be checked against the parameter type it is used in. For example, it is not possible to push a `u16` value to the stack and pop it as a `u8` value or vice versa. If this were allowed it would cause the next stack pop operation to be unaligned and could lead to corrupted results or unpredictable execution behavior.
 
 ## Memory layout
-Memory used for rexlang programs is stored in a context. A context is a contiguous array of bytes stored in RAM. A context allocation will fail with an error if there is no more memory available. Contexts are divided into 3 sections stored in the following order:
+Memory available for rexlang programs is divided into 3 sections:
 
   1. data memory
   2. program memory
@@ -35,7 +35,7 @@ These memory sections are subject to the following rules:
 
 Any violation of the above rules will raise an error and the program will be halted.
 
-An out of bounds memory access (via pointer) will raise an error and the program will be halted.
+An out of bounds memory access will raise an error and the program will be halted.
 
 ## Binary program format
 The rexlang binary program format is a compact and machine-friendly representation of a program as it appears in program memory.
