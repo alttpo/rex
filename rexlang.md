@@ -11,15 +11,6 @@ The virtual machine uses a minimal set of native state variables to keep track o
 
 These state variables are not directly accessible by rexlang programs and are implementation details of the virtual machine.
 
-## Data Types
-Rexlang uses only `u8` and `u16` types for primitive values.
-
-Pointer types `*T` are only defined for documentation purposes; the VM only deals with `u16` raw pointer values.
-
-`vec` type is `len:u8, data:*u8`.
-
-All pushes to the stack must record the primitive type of the value pushed. When a value is popped off the stack, its type must be checked against the parameter type it is used in. For example, it is not possible to push a `u16` value to the stack and pop it as a `u8` value or vice versa. If this were allowed it would cause the next stack pop operation to be unaligned and could lead to corrupted results or unpredictable execution behavior.
-
 ## Memory layout
 Memory available for rexlang programs is divided into 3 sections:
 
@@ -37,6 +28,18 @@ Any violation of the above rules will raise an error and the program will be hal
 
 An out of bounds memory access will raise an error and the program will be halted.
 
+## Data Types
+Rexlang uses only `u8` and `u16` types for primitive values.
+
+Pointer types `*T` are only defined for documentation purposes; pointers are simply `u16` memory addresses.
+
+`vec` type is `len:u8, data:*u8`.
+
+## Stack
+The stack grows downward from higher memory addresses to lower memory addresses.
+
+All pushes to the stack must record the primitive type of the value pushed. When a value is popped off the stack, its type must be checked against the parameter type it is used in. For example, it is not possible to push a `u16` value to the stack and pop it as a `u8` value or vice versa. If this were allowed it would cause the next stack pop operation to be unaligned and could lead to corrupted results or unpredictable execution behavior.
+
 ## Binary program format
 The rexlang binary program format is a compact and machine-friendly representation of a program as it appears in program memory.
 
@@ -53,24 +56,24 @@ Bits are listed from most-significant bit (MSB) to least-significant bit (LSB) f
 Alpha characters are treated as bits that represent an N-bit unsigned integer ordered most-significant to least-significant bit from left to right. Bits are grouped in octets, aka bytes, in little-endian order with the least significant byte first.
 
 ### Instructions
-| Type                 | Format                                    | Description                                                     |
-| -------------------- | ----------------------------------------- | --------------------------------------------------------------- |
-| invoke-function      | `00111110_0aaaaaaa`                       | invoke function `a`   (  0..  $7F)                              |
-| invoke-function-ext  | `00111110_1aaaaaaa_0aaaaaaa`              | invoke function `a`   ($80..$3FFF)                              |
-| opcode-ext           | `00111111_0xxxxxxx`                       | invoke opcode `x+$40` ($40..  $BF)                              |
-| opcode               | `00xxxxxx`                                | invoke opcode `x`     (  0..  $3D)                              |
-| push-array           | `01xxxxxx` [x+1 `u8` values]              | push `len`, `ptr` to array of `x+1` (1..$40) `u8` values        |
-| push-4-mixed-values  | `10dcbaxx` [x+1 values]                   | push `x+1` ( 1..$4) values of mixed sizes (`a`..`d`=`u8`/`u16`) |
-| push-8-mixed-values  | `110001xx_hgfedcba` [x+5 values]          | push `x+5` ( 5..$8) values of mixed sizes (`a`..`h`=`u8`/`u16`) |
-| push-16-mixed-values | `11001xxx_hgfedcba_ponmlkji` [x+9 values] | push `x+9` (9..$10) values of mixed sizes (`a`..`p`=`u8`/`u16`) |
-| push-16-u8-values    | `1110xxxx` [x+1 `u8` values]              | push `x+1` (1..$10) `u8` values                                 |
-| push-16-u16-values   | `1111xxxx` [x+1 `u16` values]             | push `x+1` (1..$10) `u16` values                                |
+| Type                | Format                       | Description                                                    |
+| ------------------- | ---------------------------- | -------------------------------------------------------------- |
+| push-u8             | `00xxxxxx`                   | push `x` (0..$3F) as a `u8` value                              |
+| push-4-mixed-values | `01dcbaxx` [x+1 values]      | push `x+1` (1..$4) values of mixed sizes (`a`..`d`=`u8`/`u16`) |
+| prgm-enter          | `11111101_aaaaaaaa_aaaaaaaa` | start writing to program memory at `a`                         |
+| prgm-end            | `11111110`                   | stop writing to program memory                                 |
+| syscall             | `10000000_xxxxxxxx`          | invoke system function `x` (0..$FF)                            |
+| extcall             | `10000001_xxxxxxxx_xxxxxxxx` | invoke extension function `x` (0..$FFFF)                       |
+| opcode              | `1xxxxxxx`                   | invoke opcode     `x` (  0.. $7C)                              |
+| opcode-ext          | `11111111_xxxxxxxx`          | invoke opcode `x+$80` ($80..$17F)                              |
 
-The `invoke-function` instruction executes the given function.
+The `push-u8` instruction pushes the literal value (0..$3F) as a `u8` onto the stack. For larger values use the `push-4-mixed-values` instruction.
 
-A push-N-mixed-values instruction pushes between 1 and N mixed sized argument values on the stack where each value has its own sized specified as `0` for `u8` or `1` for `u16`.
+The `push-4-mixed-values` instruction pushes `x+1` (between 1 and 4) mixed sized values onto the stack. Each value has its own sized specified with `0` for `u8` and `1` for `u16`. `a` specifies the first value's size, `b` specifies the second value's size, and so on. Only `x+1` number of values are consumed.
 
-A push-array instruction pushes on the stack a `u8` value with the length of the array (between 1 and $40 bytes), followed by a `*u8` pointer to the array data in program memory that immediately follows.
+The `prgm-enter` instruction starts writing the subsequent instructions into program memory at address `a` until the `prgm-end` instruction is encountered.
+
+Otherwise the opcode `x` is executed.
 
 ### Value formats
 | Format              | Description |
@@ -79,102 +82,109 @@ A push-array instruction pushes on the stack a `u8` value with the length of the
 | `xxxxxxxx_xxxxxxxx` | `u16` value |
 
 ### Opcodes
-| Format   | Name           | a type | b type | c type | result type | result value           |
-| -------- | -------------- | ------ | ------ | ------ | ----------- | ---------------------- |
-| `000000` | return         |        |        |        |             | pop IP                 |
-| `000001` | call           | u16    |        |        |             | push IP; IP=a          |
-| `000010` | jump           | u16    |        |        |             | IP=a                   |
-| `000011` | jump-if        | u16    | u8     |        |             | IP=a if b != 0         |
-| `000100` | discard        | a      |        |        |             | discards popped value  |
-| `000101` |                |        |        |        |             |                        |
-| `000110` |                |        |        |        |             |                        |
-| `000111` |                |        |        |        |             |                        |
-| `001000` | eq             | a      | b      |        | u8          | `a == b`               |
-| `001001` | ne             | a      | b      |        | u8          | `a != b`               |
-| `001010` | le             | a      | b      |        | u8          | `a <= b`               |
-| `001011` | gt             | a      | b      |        | u8          | `a >  b`               |
-| `001100` | lt             | a      | b      |        | u8          | `a <  b`               |
-| `001101` | ge             | a      | b      |        | u8          | `a >= b`               |
-| `001110` | and            | a      | b      |        | max         | `a &  b`               |
-| `001111` | or             | a      | b      |        | max         | `a \| b`               |
-| `010000` | xor            | a      | b      |        | max         | `a ^  b`               |
-| `010001` | not            | a      | -      |        | a           | `!a`                   |
-| `010010` | shl            | a      | u8     |        | a           | `a << b`               |
-| `010011` | shr            | a      | u8     |        | a           | `a >> b`               |
-| `010100` | add            | a      | b      |        | max         | `a +  b`               |
-| `010101` | sub            | a      | b      |        | max         | `a -  b`               |
-| `010110` | mul            | a      | b      |        | max         | `a *  b`               |
-| `010111` |                |        |        |        |             |                        |
-| `011000` | inc            | a      | -      |        | a           | `a++`                  |
-| `011001` | dec            | a      | -      |        | a           | `a--`                  |
-| `011010` | inc-u8         | *u8    | -      |        | u8          | `*( u8*)(&D[a])++`     |
-| `011011` | inc-u16        | *u16   | -      |        | u16         | `*(u16*)(&D[a])++`     |
-| `011100` | dec-u8         | *u8    | -      |        | u8          | `*( u8*)(&D[a])--`     |
-| `011101` | dec-u16        | *u16   | -      |        | u16         | `*(u16*)(&D[a])--`     |
-| `011110` | conv-u8        | u16    | -      |        | u8          | `(u8)(a & 0xFF)`       |
-| `011111` | conv-u16       | u8     | -      |        | u16         | `(u16)a`               |
-| `100000` | load-u8        | *u8    | -      |        | u8          | `*( u8*)(&D[a])`       |
-| `100001` | load-u16       | *u16   | -      |        | u16         | `*(u16*)(&D[a])`       |
-| `100010` | load-u8-offs   | *u8    | u16    |        | u8          | `*( u8*)(&D[a+b])`     |
-| `100011` | load-u16-offs  | *u16   | u16    |        | u16         | `*(u16*)(&D[a+b])`     |
-| `100100` | store-u8       | *u8    | u8     |        | u8          | `*( u8*)(&D[a]) = b`   |
-| `100101` | store-u16      | *u16   | u16    |        | u16         | `*(u16*)(&D[a]) = b`   |
-| `100110` | store-u8-offs  | *u8    | u16    | u8     | u8          | `*( u8*)(&D[a+b]) = c` |
-| `100111` | store-u16-offs | *u16   | u16    | u16    | u16         | `*(u16*)(&D[a+b]) = c` |
-| `101000` |                |        |        |        |             |                        |
-| `101001` |                |        |        |        |             |                        |
-| `101010` |                |        |        |        |             |                        |
-| `101011` |                |        |        |        |             |                        |
-| `101100` |                |        |        |        |             |                        |
-| `101101` |                |        |        |        |             |                        |
-| `101110` |                |        |        |        |             |                        |
-| `101111` |                |        |        |        |             |                        |
-| `110000` |                |        |        |        |             |                        |
-| `110001` |                |        |        |        |             |                        |
-| `110010` |                |        |        |        |             |                        |
-| `110011` |                |        |        |        |             |                        |
-| `110100` |                |        |        |        |             |                        |
-| `110101` |                |        |        |        |             |                        |
-| `110110` |                |        |        |        |             |                        |
-| `110111` |                |        |        |        |             |                        |
-| `111000` |                |        |        |        |             |                        |
-| `111001` |                |        |        |        |             |                        |
-| `111010` |                |        |        |        |             |                        |
-| `111011` |                |        |        |        |             |                        |
-| `111100` |                |        |        |        |             |                        |
-| `111101` |                |        |        |        |             |                        |
-| `111110` | function       |        |        |        |             |                        |
-| `111111` | extended       |        |        |        |             |                        |
+| Format    | Name           | a type | b type | c type | result type | computation              |
+| --------- | -------------- | ------ | ------ | ------ | ----------- | ------------------------ |
+| `0000000` | RESERVED       |        |        |        |             |                          |
+| `0000001` | RESERVED       |        |        |        |             |                          |
+| `0000010` | call           | a      |        |        |             | push IP; IP=a            |
+| `0000011` | jump / return  | a      |        |        |             | IP=a                     |
+| `0000100` | jump-if        | a      | b      |        |             | IP=a if b != 0           |
+| `0000101` | jump-if-not    | a      | b      |        |             | IP=a if b == 0           |
+| `0000110` | swap           | a      | b      |        |             | push a; push b           |
+| `0000111` | discard        | a      |        |        |             | discards popped value    |
+| `0001000` | to-u8          | a      |        |        | u8          | `(u8)(a & 0xFF)`         |
+| `0001001` | to-u16         | a      |        |        | u16         | `(u16)a`                 |
+| `0001010` | eq             | a      | b      |        | u8          | `a == b`                 |
+| `0001011` | ne             | a      | b      |        | u8          | `a != b`                 |
+| `0001100` | le             | a      | b      |        | u8          | `a <= b`                 |
+| `0001101` | gt             | a      | b      |        | u8          | `a >  b`                 |
+| `0001110` | lt             | a      | b      |        | u8          | `a <  b`                 |
+| `0001111` | ge             | a      | b      |        | u8          | `a >= b`                 |
+| `0010000` | and            | a      | b      |        | max         | `a &  b`                 |
+| `0010001` | or             | a      | b      |        | max         | `a \| b`                 |
+| `0010010` | xor            | a      | b      |        | max         | `a ^  b`                 |
+| `0010011` | not            | a      |        |        | a           | `!a`                     |
+| `0010100` | neg            | a      |        |        |             | `-a`                     |
+| `0010101` | add            | a      | b      |        | max         | `a +  b`                 |
+| `0010110` | sub            | a      | b      |        | max         | `a -  b`                 |
+| `0010111` | mul            | a      | b      |        | max         | `a *  b`                 |
+| `0011000` | inc            | a      |        |        | a           | `++a`                    |
+| `0011001` | dec            | a      |        |        | a           | `--a`                    |
+| `0011010` | ld-u8          | *u8    |        |        | u8          | `*( u8*)(&M[a])`         |
+| `0011011` | ld-u16         | *u16   |        |        | u16         | `*(u16*)(&M[a])`         |
+| `0011100` | st-u8          | *u8    | u8     |        | u8          | `*( u8*)(&M[a]) = b`     |
+| `0011101` | st-u16         | *u16   | u16    |        | u16         | `*(u16*)(&M[a]) = b`     |
+| `0011110` | shl            | a      | b      |        | a           | `a << b`                 |
+| `0011111` | shr            | a      | b      |        | a           | `a >> b`                 |
+| `010xxxx` | shlx           | a      |        |        | a           | `a << x`                 |
+| `011xxxx` | shrx           | a      |        |        | a           | `a >> x`                 |
+| `1000xxx` | ld-u8-offs     | *u8    |        |        | u8          | `*( u8*)(&M[a+x+1])`     |
+| `1001xxx` | ld-u16-offs    | *u16   |        |        | u16         | `*(u16*)(&M[a+x+1])`     |
+| `1010xxx` | st-u8-offs     | *u8    | u8     |        | u8          | `*( u8*)(&M[a+x+1]) = b` |
+| `1011xxx` | st-u16-offs    | *u16   | u16    |        | u16         | `*(u16*)(&M[a+x+1]) = b` |
+| `1100000` | vec-reset      | *vec   |        |        |             |                          |
+| `1100001` | vec-ld-len     | *vec   |        |        |             |                          |
+| `1100010` | vec-append-vec | *vec   | *vec   |        |             |                          |
+| `1100011` | vec-append-u8  | *vec   | u8     |        |             |                          |
+| `1100100` | vec-append-u16 | *vec   | u16    |        |             |                          |
+| `1100101` |                |        |        |        |             |                          |
+| `1100110` |                |        |        |        |             |                          |
+| `1100111` |                |        |        |        |             |                          |
+| `1101000` |                |        |        |        |             |                          |
+| `1101001` |                |        |        |        |             |                          |
+| `1101010` |                |        |        |        |             |                          |
+| `1101011` |                |        |        |        |             |                          |
+| `1101100` |                |        |        |        |             |                          |
+| `1101101` |                |        |        |        |             |                          |
+| `1101110` |                |        |        |        |             |                          |
+| `1101111` |                |        |        |        |             |                          |
+| `1110000` |                |        |        |        |             |                          |
+| `1110001` |                |        |        |        |             |                          |
+| `1110010` |                |        |        |        |             |                          |
+| `1110011` |                |        |        |        |             |                          |
+| `1110100` |                |        |        |        |             |                          |
+| `1110101` |                |        |        |        |             |                          |
+| `1110110` |                |        |        |        |             |                          |
+| `1110111` |                |        |        |        |             |                          |
+| `1111000` |                |        |        |        |             |                          |
+| `1111001` |                |        |        |        |             |                          |
+| `1111010` |                |        |        |        |             |                          |
+| `1111011` |                |        |        |        |             |                          |
+| `1111100` |                |        |        |        |             |                          |
+| `1111101` | RESERVED       |        |        |        |             |                          |
+| `1111110` | RESERVED       |        |        |        |             |                          |
+| `1111111` | RESERVED       |        |        |        |             |                          |
 
 ## Standard Function Library
-| Code | Definition                      | Description                            |
-| ---: | :------------------------------ | -------------------------------------- |
-| `00` | `(exit)`                        |                                        |
-| `01` | `(vec-len        *vec):u16`     |                                        |
-| `02` | `(vec-reset      *vec)`         |                                        |
-| `03` | `(vec-append-vec *vec vec)`     |                                        |
-| `04` | `(vec-append-u8  *vec  u8):u8 ` | `*( u8*)(&D[a+1+D[a]]) = b; D[a] += 1` |
-| `05` | `(vec-append-u16 *vec u16):u16` | `*(u16*)(&D[a+1+D[a]]) = b; D[a] += 2` |
-| `06` | `()`                            |                                        |
-| `07` | `()`                            |                                        |
-| `08` | `()`                            |                                        |
-| `09` | `()`                            |                                        |
-| `0A` | `()`                            |                                        |
-| `0B` | `()`                            |                                        |
-| `0C` | `()`                            |                                        |
-| `0D` | `()`                            |                                        |
-| `0E` | `()`                            |                                        |
-| `0F` | `()`                            |                                        |
+| Code | Definition                  | Description |
+| ---: | :-------------------------- | ----------- |
+| `00` | `(exit)`                    |             |
+| `01` | `(vec-reset      *vec)`     |             |
+| `02` | `(vec-ld-len     *vec)`     |             |
+| `03` | `(vec-append-vec *vec vec)` |             |
+| `04` | `(vec-append-u8  *vec  u8)` |             |
+| `05` | `(vec-append-u16 *vec u16)` |             |
+| `06` | `()`                        |             |
+| `07` | `()`                        |             |
+| `08` | `()`                        |             |
+| `09` | `()`                        |             |
+| `0A` | `()`                        |             |
+| `0B` | `()`                        |             |
+| `0C` | `()`                        |             |
+| `0D` | `()`                        |             |
+| `0E` | `()`                        |             |
+| `0F` | `()`                        |             |
 
+## Extension Function Library
+|   Code | Definition                                                | Description |
+| -----: | :-------------------------------------------------------- | ----------- |
+| `0000` | `(chip-read-u8   chip:u8 offs:u16):u8`                    |             |
+| `0001` | `(chip-read-u16  chip:u8 offs:u16):u16`                   |             |
+| `0002` | `(chip-read      chip:u8 offs:u16 len:u8 dest:*vec):*vec` |             |
+| `0003` | `(chip-write-u8  chip:u8 offs:u16 src:u8):u8`             |             |
+| `0004` | `(chip-write-u16 chip:u8 offs:u16 src:u16):u16`           |             |
+| `0005` | `(chip-write     chip:u8 offs:u16 src:*vec)`              |             |
 
-```
-; read data from chip memory:
-(chip-read-u8   chip:u8 offs:u16):u8
-(chip-read-u16  chip:u8 offs:u16):u16
-(chip-read      chip:u8 offs:u16 len:u16 dest:*vec):*vec
-
-; write data to chip memory:
-(chip-write-u8  chip:u8 offs:u16 src:u8):u8
-(chip-write-u16 chip:u8 offs:u16 src:u16):u16
-(chip-write     chip:u8 offs:u16 src:u8...)
-```
+TODO: input/output via USB
+considered raw stdin/stdout treatment but that's too unstructured to allow for multiplexing
+consider allowing in/out socket pairs per client?
