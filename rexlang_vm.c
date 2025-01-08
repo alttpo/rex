@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <string.h>
 #include <stdbool.h>
+#include <setjmp.h>
 #include "rexlang_vm.h"
 
 typedef uint8_t  u8;
@@ -9,6 +10,13 @@ typedef uint16_t u16;
 
 #define TY_U8  0
 #define TY_U16 1
+
+#define throw_error(vm, e) { \
+	vm->err.file = __FILE__; \
+	vm->err.line = __LINE__; \
+	vm->err.code = e; \
+	longjmp(vm->err.j, vm->err.code); \
+}
 
 // get page of memory:
 static inline u8* page(struct rexlang_vm *vm, u16 p)
@@ -34,13 +42,21 @@ static inline u16 rdau16(rexlang_page m, u16 *p)
 // read from IP, advance IP
 static inline u8 rdipu8(struct rexlang_vm *vm)
 {
-	return rdau8(page(vm, vm->ip), &vm->ip);
+	u8 *m = page(vm, vm->ip);
+	if (!m) {
+		throw_error(vm, REXLANG_ERR_PAGE_UNMAPPED);
+	}
+	return rdau8(m, &vm->ip);
 }
 
 // read from IP, advance IP
 static inline u16 rdipu16(struct rexlang_vm *vm)
 {
-	return rdau16(page(vm, vm->ip), &vm->ip);
+	u8 *m = page(vm, vm->ip);
+	if (!m) {
+		throw_error(vm, REXLANG_ERR_PAGE_UNMAPPED);
+	}
+	return rdau16(m, &vm->ip);
 }
 
 // write, advance pointer
@@ -78,11 +94,14 @@ static void push(struct rexlang_vm *vm, u16 v, u8 type)
 	assert((type <= TY_U16) && "invalid type value");
 
 	if ((vm->sp&0xFF) <= type) {
-		// TODO: indicate out of stack space error
+		throw_error(vm, REXLANG_ERR_STACK_FULL);
 		return;
 	}
 
 	struct rexlang_stack *k = (struct rexlang_stack *)page(vm, vm->sp);
+	if (!k) {
+		throw_error(vm, REXLANG_ERR_PAGE_UNMAPPED);
+	}
 
 	if (type == TY_U8) {
 		// write the value into the stack:
@@ -104,7 +123,7 @@ static void push(struct rexlang_vm *vm, u16 v, u8 type)
 static u16 pop(struct rexlang_vm *vm, u8 *type_out)
 {
 	if (vm->sp >= 0xFFE0) {
-		// TODO: stack empty error
+		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
 		return 0xFFFF;
 	}
 
@@ -140,8 +159,20 @@ static void opcode(struct rexlang_vm *vm, u16 x)
 	}
 }
 
-void rexlang_exec(struct rexlang_vm *vm)
+enum rexlang_error rexlang_exec(struct rexlang_vm *vm)
 {
+	// reset error state:
+	vm->err.code = REXLANG_ERR_SUCCESS;
+	vm->err.file = NULL;
+	vm->err.line = 0;
+	// mark longjmp destination for error handling:
+	if (setjmp(vm->err.j)) {
+		// we get here only if throw_error() (aka longjmp) is called
+		// return error code; additional details found in vm->err struct:
+		return vm->err.code;
+	}
+
+	// read instruction:
 	u8 o = rdipu8(vm);
 	if ((o & 0xC0) == 0) {
 		// push u8 value:
@@ -179,6 +210,8 @@ void rexlang_exec(struct rexlang_vm *vm)
 		u16 x = (o & 0x7F);
 		opcode(vm, x);
 	}
+
+	return vm->err.code;
 }
 
 void rexlang_init(struct rexlang_vm *vm, rexlang_mem_f m)
@@ -188,4 +221,5 @@ void rexlang_init(struct rexlang_vm *vm, rexlang_mem_f m)
 	vm->m = m;
 	vm->ip = 0x8000;
 	vm->sp = 0xFF00 + 224;
+	vm->err.code = REXLANG_ERR_SUCCESS;
 }
