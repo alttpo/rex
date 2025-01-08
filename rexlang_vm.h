@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #ifndef REXLANG_MEMSZ_PROG
-#  define REXLANG_MEMSZ_PROG 3172
+#  define REXLANG_MEMSZ_PROG 3072
 #endif
 #ifndef REXLANG_MEMSZ_DATA
 #  define REXLANG_MEMSZ_DATA 1024
