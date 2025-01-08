@@ -11,8 +11,9 @@ typedef uint8_t rexlang_page[REXLANG_PAGESZ];
 struct rexlang_vm;
 
 struct rexlang_stack {
-	uint8_t s[224];
-	uint32_t st[8];
+	uint8_t  s[224];    // items
+	uint32_t t[7];      // item type bits
+	uint32_t c;         // item count
 };
 
 _Static_assert(sizeof(struct rexlang_stack) == REXLANG_PAGESZ, "stack must be same size as a page");

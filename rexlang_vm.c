@@ -62,22 +62,22 @@ static inline void wrau16(rexlang_page m, u16 *p, u16 v)
 static inline void wrnu8(rexlang_page m, u16 *p, u8 v)
 {
 	assert(m);
-	m[*p+0 & 0xFF] = v;
+	m[(*p+0) & 0xFF] = v;
 }
 
 // write, no-advance pointer
 static inline void wrnu16(rexlang_page m, u16 *p, u16 v)
 {
 	assert(m);
-	m[*p+0 & 0xFF] = v & 0xFF;
-	m[*p+1 & 0xFF] = v >> 8;
+	m[(*p+0) & 0xFF] = v & 0xFF;
+	m[(*p+1) & 0xFF] = v >> 8;
 }
 
 static void push(struct rexlang_vm *vm, u16 v, u8 type)
 {
 	assert((type <= TY_U16) && "invalid type value");
 
-	if (vm->sp <= type) {
+	if ((vm->sp&0xFF) <= type) {
 		// TODO: indicate out of stack space error
 		return;
 	}
@@ -85,17 +85,20 @@ static void push(struct rexlang_vm *vm, u16 v, u8 type)
 	struct rexlang_stack *k = (struct rexlang_stack *)page(vm, vm->sp);
 
 	if (type == TY_U8) {
+		// write the value into the stack:
 		vm->sp--;
 		wrnu8(k->s, &vm->sp, v);
+		// update type bits:
+		k->t[k->c >> 5] &= ~(k->c & 31);
+		k->c++;
 	} else if (type == TY_U16) {
+		// write the value into the stack:
 		vm->sp -= 2;
 		wrnu16(k->s, &vm->sp, v);
+		// update type bits:
+		k->t[k->c >> 5] |= (k->c & 31);
+		k->c++;
 	}
-
-	// shift-left the entire type stack by one bit:
-	k->st[1] = (k->st[1] << 1) | (k->st[0] >> 31);
-	// and push in the size bit:
-	k->st[0] = (k->st[0] << 1) | (type);
 }
 
 static u16 pop(struct rexlang_vm *vm, u8 *type_out)
@@ -107,12 +110,11 @@ static u16 pop(struct rexlang_vm *vm, u8 *type_out)
 
 	struct rexlang_stack *k = (struct rexlang_stack *)page(vm, vm->sp);
 
-	u8 ty = k->st[0] & 1;
-	*type_out = ty;
+	// read type bits:
+	u8 ty = !!(k->t[k->c >> 5] & (k->c & 31));
+	k->c--;
 
-	// shift-right the entire type stack by one bit:
-	k->st[0] = (k->st[0] >> 1) | (k->st[1] << 31);
-	k->st[1] = (k->st[1] >> 1);
+	*type_out = ty;
 
 	// read the value from the stack and move the sp:
 	if (ty == TY_U8) {
