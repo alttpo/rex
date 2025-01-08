@@ -1,35 +1,32 @@
 
-#ifndef _REX_VM_H_
-#define _REX_VM_H_
+#ifndef _REXLANG_VM_H_
+#define _REXLANG_VM_H_
 
 #include <stdint.h>
 
-#ifndef REXLANG_MEMSZ_PROG
-#  define REXLANG_MEMSZ_PROG 3072
-#endif
-#ifndef REXLANG_MEMSZ_DATA
-#  define REXLANG_MEMSZ_DATA 1024
-#endif
+#define REXLANG_PAGESZ 256
 
-#if REXLANG_MEMSZ_PROG + REXLANG_MEMSZ_DATA > 65536
-#  error REXLANG_MEMSZ_PROG + REXLANG_MEMSZ_DATA cannot exceed 65336 bytes
-#endif
+typedef uint8_t rexlang_page[REXLANG_PAGESZ];
 
-#define REXLANG_MEMOFFS_PRGM REXLANG_MEMSZ_DATA
+struct rexlang_vm;
 
-struct rexlang_vm {
-	uint16_t ip;    // program counter as index into m[], starts at REXLANG_MEMOFFS_PRGM
-	uint16_t sp;    // stack pointer as index into s[], starts at sizeof(s)
-
-	// data+program memory:
-	uint8_t  m[REXLANG_MEMSZ_DATA+REXLANG_MEMSZ_PROG];
-
-	// stack values and their types stored in bitfield (0 = u8, 1 = u16):
-	uint8_t  s[64]; // stack
-	uint32_t st[2]; // stack type bits
+struct rexlang_stack {
+	uint8_t s[224];
+	uint32_t st[8];
 };
 
-void rexlang_init(struct rexlang_vm *vm);
+_Static_assert(sizeof(struct rexlang_stack) == REXLANG_PAGESZ, "stack must be same size as a page");
+
+// returns a pointer to 256 bytes of memory mapped for the given page or NULL
+typedef uint8_t* (*rexlang_mem_f)(struct rexlang_vm *vm, uint8_t page);
+
+struct rexlang_vm {
+	uint16_t ip;        // instruction pointer
+	uint16_t sp;        // stack pointer to free position
+	rexlang_mem_f m;    // memory mapper
+};
+
+void rexlang_init(struct rexlang_vm *vm, rexlang_mem_f m);
 void rexlang_exec(struct rexlang_vm *vm);
 
 #endif
