@@ -30,9 +30,10 @@ enum rexlang_error {
 };
 
 struct rexlang_vm {
-	uint16_t ip;        // instruction pointer
-	uint16_t sp;        // stack pointer to free position
-	rexlang_mem_f m;    // memory mapper
+	uint16_t ip;                // instruction pointer
+	uint16_t sp;                // stack pointer to free position
+	struct rexlang_stack *k;    // stack memory page
+	rexlang_mem_f m;            // memory mapper
 	struct {
 		const char *file;
 		int line;

@@ -5,6 +5,9 @@
 #include <setjmp.h>
 #include "rexlang_vm.h"
 
+#define   likely(x) __builtin_expect((x), 1)
+#define unlikely(x) __builtin_expect((x), 0)
+
 typedef uint8_t  u8;
 typedef uint16_t u16;
 
@@ -43,7 +46,7 @@ static inline u16 rdau16(rexlang_page m, u16 *p)
 static inline u8 rdipu8(struct rexlang_vm *vm)
 {
 	u8 *m = page(vm, vm->ip);
-	if (!m) {
+	if (unlikely(!m)) {
 		throw_error(vm, REXLANG_ERR_PAGE_UNMAPPED);
 	}
 	return rdau8(m, &vm->ip);
@@ -53,7 +56,7 @@ static inline u8 rdipu8(struct rexlang_vm *vm)
 static inline u16 rdipu16(struct rexlang_vm *vm)
 {
 	u8 *m = page(vm, vm->ip);
-	if (!m) {
+	if (unlikely(!m)) {
 		throw_error(vm, REXLANG_ERR_PAGE_UNMAPPED);
 	}
 	return rdau16(m, &vm->ip);
@@ -70,7 +73,7 @@ static inline void wrau8(rexlang_page m, u16 *p, u8 v)
 static inline void wrau16(rexlang_page m, u16 *p, u16 v)
 {
 	assert(m);
-	m[*p++ & 0xFF] = v & 0xFF;
+	m[*p++ & 0xFF] = v;
 	m[*p++ & 0xFF] = v >> 8;
 }
 
@@ -85,52 +88,55 @@ static inline void wrnu8(rexlang_page m, u16 *p, u8 v)
 static inline void wrnu16(rexlang_page m, u16 *p, u16 v)
 {
 	assert(m);
-	m[(*p+0) & 0xFF] = v & 0xFF;
+	m[(*p+0) & 0xFF] = v;
 	m[(*p+1) & 0xFF] = v >> 8;
 }
 
-static void push(struct rexlang_vm *vm, u16 v, u8 type)
+static inline void push_u8(struct rexlang_vm *vm, u8 v)
 {
-	assert((type <= TY_U16) && "invalid type value");
-
-	if ((vm->sp&0xFF) <= type) {
+	if (unlikely((vm->sp&0xFF) <= 0)) {
 		throw_error(vm, REXLANG_ERR_STACK_FULL);
 		return;
 	}
 
-	struct rexlang_stack *k = (struct rexlang_stack *)page(vm, vm->sp);
-	if (!k) {
-		throw_error(vm, REXLANG_ERR_PAGE_UNMAPPED);
-	}
+	struct rexlang_stack *k = vm->k;
 
-	if (type == TY_U8) {
-		// write the value into the stack:
-		vm->sp--;
-		wrnu8(k->s, &vm->sp, v);
-		// update type bits:
-		k->t[k->c >> 5] &= ~(k->c & 31);
-		k->c++;
-	} else if (type == TY_U16) {
-		// write the value into the stack:
-		vm->sp -= 2;
-		wrnu16(k->s, &vm->sp, v);
-		// update type bits:
-		k->t[k->c >> 5] |= (k->c & 31);
-		k->c++;
-	}
+	// write the value into the stack:
+	vm->sp--;
+	wrnu8(k->s, &vm->sp, v);
+	// update type bits:
+	k->t[k->c >> 5] &= ~(1UL<<(k->c & 31));
+	k->c++;
 }
 
-static u16 pop(struct rexlang_vm *vm, u8 *type_out)
+static inline void push_u16(struct rexlang_vm *vm, u16 v)
 {
-	if (vm->sp >= 0xFFE0) {
+	if (unlikely((vm->sp&0xFF) <= 1)) {
+		throw_error(vm, REXLANG_ERR_STACK_FULL);
+		return;
+	}
+
+	struct rexlang_stack *k = vm->k;
+
+	// write the value into the stack:
+	vm->sp -= 2;
+	wrnu16(k->s, &vm->sp, v);
+	// update type bits:
+	k->t[k->c >> 5] |= 1UL<<(k->c & 31);
+	k->c++;
+}
+
+static inline u16 pop(struct rexlang_vm *vm, u8 *type_out)
+{
+	if (unlikely(vm->sp >= 0xFFE0)) {
 		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
 		return 0xFFFF;
 	}
 
-	struct rexlang_stack *k = (struct rexlang_stack *)page(vm, vm->sp);
+	struct rexlang_stack *k = vm->k;
 
 	// read type bits:
-	u8 ty = !!(k->t[k->c >> 5] & (k->c & 31));
+	u8 ty = (k->t[k->c >> 5] & (1UL<<(k->c & 31))) != 0;
 	k->c--;
 
 	*type_out = ty;
@@ -149,7 +155,7 @@ static void opcode(struct rexlang_vm *vm, u16 x)
 	case 0x02: { // call
 		u8 ty;
 		u16 a = pop(vm, &ty);
-		push(vm, vm->ip, TY_U16);
+		push_u16(vm, vm->ip);
 		vm->ip = a;
 		break;
 	}
@@ -172,21 +178,28 @@ enum rexlang_error rexlang_exec(struct rexlang_vm *vm)
 		return vm->err.code;
 	}
 
+	// look up stack memory:
+	vm->k = (struct rexlang_stack *)page(vm, vm->sp);
+	if (unlikely(!vm->k)) {
+		throw_error(vm, REXLANG_ERR_PAGE_UNMAPPED);
+		return vm->err.code;
+	}
+
 	// read instruction:
 	u8 o = rdipu8(vm);
 	if ((o & 0xC0) == 0) {
 		// push u8 value:
-		push(vm, o, TY_U8);
+		push_u8(vm, o);
 	} else if ((o & 0xC0) == 0x40) {
 		// push up to 4 mixed values:
 		int x = (o & 3) + 1;
 		while (x--) {
 			if (o & 4) {
 				u16 v = rdipu16(vm);
-				push(vm, v, TY_U16);
+				push_u16(vm, v);
 			} else {
 				u16 v = rdipu8(vm);
-				push(vm, v, TY_U8);
+				push_u8(vm, v);
 			}
 			o >>= 1;
 		}
