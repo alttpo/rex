@@ -24,15 +24,15 @@ enum rexlang_error {
 };
 
 struct rexlang_vm {
-	uint_fast16_t ip;                // instruction pointer
-	uint_fast16_t sp;                // stack pointer to free position
-
 	uint8_t *m;                 // program memory
 	uint8_t *d;                 // data memory
 	struct rexlang_stack *k;    // stack memory
 
 	size_t m_size;
 	size_t d_size;
+
+	uint_fast16_t ip;           // instruction pointer
+	uint_fast16_t sp;           // stack pointer to free position
 
 	// details of last error iff code != REXLANG_ERR_SUCCESS:
 	struct {

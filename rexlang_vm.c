@@ -8,13 +8,15 @@
 #define   likely(x) __builtin_expect((x), 1)
 #define unlikely(x) __builtin_expect((x), 0)
 
-#define max(a,b) (((a) > (b)) ? (a) : (b))
-
+// using uint_fastX_t makes a big code-size difference for ARM thumb
 typedef uint_fast8_t  u8;
 typedef uint_fast16_t u16;
 
 #define TY_U8  0
 #define TY_U16 1
+
+// OR the two type bits together to find the bigger size (any 1 wins)
+#define tmax(a,b) ((a) | (b))
 
 #define throw_error(vm, e) { \
 	vm->err.file = __FILE__; \
@@ -215,10 +217,12 @@ static inline u16 pop(struct rexlang_vm *vm, u8 *type_out)
 
 static void opcode(struct rexlang_vm *vm, u16 x)
 {
-	u8 ta;
-	u8 tb;
 	u16 a;
 	u16 b;
+	u16 c;
+	u8 ta;
+	u8 tb;
+	u8 tc;
 
 	if ((x & 0xF0) == 0x20) { // 010xxxx shlx
 		a = pop(vm, &ta);
@@ -336,87 +340,104 @@ static void opcode(struct rexlang_vm *vm, u16 x)
 	case 0x10: { // 0010000 and
 		b = pop(vm, &tb);
 		a = pop(vm, &ta);
-		push(vm, a & b, max(a, b));
+		push(vm, a & b, tmax(ta, tb));
 		break;
 	}
 	case 0x11: { // 0010001 or
-
+		b = pop(vm, &tb);
+		a = pop(vm, &ta);
+		push(vm, a | b, tmax(ta, tb));
 		break;
 	}
 	case 0x12: { // 0010010 xor
-
+		b = pop(vm, &tb);
+		a = pop(vm, &ta);
+		push(vm, a ^ b, tmax(ta, tb));
 		break;
 	}
 	case 0x13: { // 0010011 not
-
+		a = pop(vm, &ta);
+		push(vm, !a, ta);
 		break;
 	}
 	case 0x14: { // 0010100 neg
-
+		a = pop(vm, &ta);
+		push(vm, -a, ta);
 		break;
 	}
 	case 0x15: { // 0010101 add
-
+		b = pop(vm, &tb);
+		a = pop(vm, &ta);
+		push(vm, a + b, tmax(ta, tb));
 		break;
 	}
 	case 0x16: { // 0010110 sub
-
+		b = pop(vm, &tb);
+		a = pop(vm, &ta);
+		push(vm, a - b, tmax(ta, tb));
 		break;
 	}
 	case 0x17: { // 0010111 mul
-
+		b = pop(vm, &tb);
+		a = pop(vm, &ta);
+		push(vm, a * b, tmax(ta, tb));
 		break;
 	}
 	case 0x18: { // 0011000 inc
-
+		a = pop(vm, &ta);
+		push(vm, a+1, tmax(ta, tb));
 		break;
 	}
 	case 0x19: { // 0011001 dec
-
+		a = pop(vm, &ta);
+		push(vm, a-1, tmax(ta, tb));
 		break;
 	}
 	case 0x1A: { // 0011010 ld-u8
-
+		a = pop_u16(vm);
+		push_u8(vm, rddu8(vm, a));
 		break;
 	}
 	case 0x1B: { // 0011011 ld-u16
-
+		a = pop_u16(vm);
+		push_u16(vm, rddu16(vm, a));
 		break;
 	}
 	case 0x1C: { // 0011100 st-u8
-
+		b = pop_u8(vm);
+		a = pop_u16(vm);
+		wrdu8(vm, a, b);
+		push_u8(vm, b);
 		break;
 	}
 	case 0x1D: { // 0011101 st-u16
-
+		b = pop_u16(vm);
+		a = pop_u16(vm);
+		wrdu8(vm, a, b);
+		push_u16(vm, b);
 		break;
 	}
 	case 0x1E: { // 0011110 shl
-
+		b = pop(vm, &tb);
+		a = pop(vm, &ta);
+		push(vm, a << b, ta);
 		break;
 	}
 	case 0x1F: { // 0011111 shr
-
+		b = pop(vm, &tb);
+		a = pop(vm, &ta);
+		push(vm, a >> b, ta);
 		break;
 	}
-	// range from 0x20 to 0x5F handled by if statements above
-	case 0x60: { // 1100000 vec-reset
-
-		break;
-	}
-	case 0x61: { // 1100001 vec-ld-len
-
-		break;
-	}
-	case 0x62: { // 1100010 vec-append-vec
-
-		break;
-	}
-	case 0x63: { // 1100011 vec-append-u8
-
-		break;
-	}
-	case 0x64: { // 1100100 vec-append-u16
+	// NOTE: range from 0x20 to 0x5F handled by if statements above
+	case 0x60: { // 1100000 copy
+		c = pop(vm, &tc);
+		b = pop_u16(vm);
+		a = pop_u16(vm);
+		bounds_check_data(vm, a+c-1);
+		bounds_check_data(vm, b+c-1);
+		memcpy(vm->d + a, vm->d + b, c);
+		push_u16(vm, a + c);
 		break;
 	}
 
