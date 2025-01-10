@@ -24,14 +24,14 @@ typedef uint16_t u16;
 // read, advance pointer
 static inline u8 rdau8(uint8_t* m, u16 *p)
 {
-	return m[*p++ & 0xFF];
+	return m[*p++];
 }
 
 // read, advance pointer
 static inline u16 rdau16(uint8_t* m, u16 *p)
 {
 	assert(m);
-	u16 a = *p & 0xFF;
+	u16 a = *p;
 	u16 lo = m[a+0];
 	u16 hi = m[a+1];
 	u16 val = ((hi)<<8) | (lo);
@@ -55,21 +55,20 @@ static inline u16 rdipu16(struct rexlang_vm *vm)
 static inline void wrnu8(uint8_t* m, u16 p, u8 v)
 {
 	assert(m);
-	m[(p & 0xFF)] = v;
+	m[p] = v;
 }
 
 // write, no-advance pointer
 static inline void wrnu16(uint8_t* m, u16 p, u16 v)
 {
 	assert(m);
-	unsigned int a = p & 0xFF;
-	m[a+0] = v;
-	m[a+1] = v >> 8;
+	m[p+0] = v;
+	m[p+1] = v >> 8;
 }
 
 static inline void push_u8(struct rexlang_vm *vm, u8 v)
 {
-	if (unlikely((vm->sp&0xFF) <= 0)) {
+	if (unlikely(vm->sp == 0)) {
 		throw_error(vm, REXLANG_ERR_STACK_FULL);
 		return;
 	}
@@ -86,7 +85,7 @@ static inline void push_u8(struct rexlang_vm *vm, u8 v)
 
 static inline void push_u16(struct rexlang_vm *vm, u16 v)
 {
-	if (unlikely((vm->sp&0xFF) <= 1)) {
+	if (unlikely(vm->sp <= 1)) {
 		throw_error(vm, REXLANG_ERR_STACK_FULL);
 		return;
 	}
