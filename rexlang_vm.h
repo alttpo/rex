@@ -15,18 +15,24 @@ _Static_assert(sizeof(struct rexlang_stack) == 256, "stack must be 256 bytes");
 
 enum rexlang_error {
 	REXLANG_ERR_SUCCESS = 0,
+	REXLANG_ERR_BAD_OPCODE,
 	REXLANG_ERR_STACK_EMPTY,
 	REXLANG_ERR_STACK_FULL,
 	REXLANG_ERR_POP_EXPECTED_U8,
 	REXLANG_ERR_POP_EXPECTED_U16,
+	REXLANG_ERR_DATA_ADDRESS_OUT_OF_BOUNDS,
 };
 
 struct rexlang_vm {
-	uint16_t ip;                // instruction pointer
-	uint16_t sp;                // stack pointer to free position
+	uint_fast16_t ip;                // instruction pointer
+	uint_fast16_t sp;                // stack pointer to free position
+
 	uint8_t *m;                 // program memory
 	uint8_t *d;                 // data memory
 	struct rexlang_stack *k;    // stack memory
+
+	size_t m_size;
+	size_t d_size;
 
 	// details of last error iff code != REXLANG_ERR_SUCCESS:
 	struct {
