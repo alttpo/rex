@@ -21,75 +21,50 @@ typedef uint16_t u16;
 	longjmp(vm->err.j, vm->err.code); \
 }
 
-// get page of memory:
-static inline u8* page(struct rexlang_vm *vm, u16 p)
-{
-	return vm->m(vm, p >> 8);
-}
-
 // read, advance pointer
-static inline u8 rdau8(rexlang_page m, u16 *p)
+static inline u8 rdau8(uint8_t* m, u16 *p)
 {
 	return m[*p++ & 0xFF];
 }
 
 // read, advance pointer
-static inline u16 rdau16(rexlang_page m, u16 *p)
+static inline u16 rdau16(uint8_t* m, u16 *p)
 {
 	assert(m);
-	u8 lo = m[*p++ & 0xFF];
-	u8 hi = m[*p++ & 0xFF];
-	return ((u16)(hi)<<8) | (u16)(lo);
+	u16 a = *p & 0xFF;
+	u16 lo = m[a+0];
+	u16 hi = m[a+1];
+	u16 val = ((hi)<<8) | (lo);
+	*p += 2;
+	return val;
 }
 
 // read from IP, advance IP
 static inline u8 rdipu8(struct rexlang_vm *vm)
 {
-	u8 *m = page(vm, vm->ip);
-	if (unlikely(!m)) {
-		throw_error(vm, REXLANG_ERR_PAGE_UNMAPPED);
-	}
-	return rdau8(m, &vm->ip);
+	return rdau8(vm->m, &vm->ip);
 }
 
 // read from IP, advance IP
 static inline u16 rdipu16(struct rexlang_vm *vm)
 {
-	u8 *m = page(vm, vm->ip);
-	if (unlikely(!m)) {
-		throw_error(vm, REXLANG_ERR_PAGE_UNMAPPED);
-	}
-	return rdau16(m, &vm->ip);
-}
-
-// write, advance pointer
-static inline void wrau8(rexlang_page m, u16 *p, u8 v)
-{
-	assert(m);
-	m[*p++ & 0xFF] = v;
-}
-
-// write, advance pointer
-static inline void wrau16(rexlang_page m, u16 *p, u16 v)
-{
-	assert(m);
-	m[*p++ & 0xFF] = v;
-	m[*p++ & 0xFF] = v >> 8;
+	return rdau16(vm->m, &vm->ip);
 }
 
 // write, no-advance pointer
-static inline void wrnu8(rexlang_page m, u16 *p, u8 v)
+static inline void wrnu8(uint8_t* m, u16 p, u8 v)
 {
 	assert(m);
-	m[(*p+0) & 0xFF] = v;
+	m[(p & 0xFF)] = v;
 }
 
 // write, no-advance pointer
-static inline void wrnu16(rexlang_page m, u16 *p, u16 v)
+static inline void wrnu16(uint8_t* m, u16 p, u16 v)
 {
 	assert(m);
-	m[(*p+0) & 0xFF] = v;
-	m[(*p+1) & 0xFF] = v >> 8;
+	unsigned int a = p & 0xFF;
+	m[a+0] = v;
+	m[a+1] = v >> 8;
 }
 
 static inline void push_u8(struct rexlang_vm *vm, u8 v)
@@ -103,7 +78,7 @@ static inline void push_u8(struct rexlang_vm *vm, u8 v)
 
 	// write the value into the stack:
 	vm->sp--;
-	wrnu8(k->s, &vm->sp, v);
+	wrnu8(k->s, vm->sp, v);
 	// update type bits:
 	k->t[k->c >> 5] &= ~(1UL<<(k->c & 31));
 	k->c++;
@@ -120,17 +95,57 @@ static inline void push_u16(struct rexlang_vm *vm, u16 v)
 
 	// write the value into the stack:
 	vm->sp -= 2;
-	wrnu16(k->s, &vm->sp, v);
+	wrnu16(k->s, vm->sp, v);
 	// update type bits:
 	k->t[k->c >> 5] |= 1UL<<(k->c & 31);
 	k->c++;
 }
 
+static inline u8 pop_u8(struct rexlang_vm *vm)
+{
+	if (unlikely(vm->sp >= 0xE0)) {
+		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
+		return 0xFF;
+	}
+
+	struct rexlang_stack *k = vm->k;
+
+	// read type bits:
+	if ((k->t[k->c >> 5] & (1UL<<(k->c & 31))) != 0) {
+		throw_error(vm, REXLANG_ERR_POP_EXPECTED_U8);
+		return 0xFF;
+	};
+	k->c--;
+
+	// read the value from the stack and move the sp:
+	return rdau8(k->s, &vm->sp);
+}
+
+static inline u16 pop_u16(struct rexlang_vm *vm)
+{
+	if (unlikely(vm->sp >= 0xE0)) {
+		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
+		return 0xFF;
+	}
+
+	struct rexlang_stack *k = vm->k;
+
+	// read type bits:
+	if ((k->t[k->c >> 5] & (1UL<<(k->c & 31))) == 0) {
+		throw_error(vm, REXLANG_ERR_POP_EXPECTED_U16);
+		return 0xFF;
+	};
+	k->c--;
+
+	// read the value from the stack and move the sp:
+	return rdau16(k->s, &vm->sp);
+}
+
 static inline u16 pop(struct rexlang_vm *vm, u8 *type_out)
 {
-	if (unlikely(vm->sp >= 0xFFE0)) {
+	if (unlikely(vm->sp >= 0xE0)) {
 		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
-		return 0xFFFF;
+		return 0xFF;
 	}
 
 	struct rexlang_stack *k = vm->k;
@@ -165,8 +180,12 @@ static void opcode(struct rexlang_vm *vm, u16 x)
 	}
 }
 
-enum rexlang_error rexlang_exec(struct rexlang_vm *vm)
+enum rexlang_error rexlang_vm_exec(struct rexlang_vm *vm)
 {
+	assert(vm->m);
+	assert(vm->d);
+	assert(vm->k);
+
 	// reset error state:
 	vm->err.code = REXLANG_ERR_SUCCESS;
 	vm->err.file = NULL;
@@ -175,13 +194,6 @@ enum rexlang_error rexlang_exec(struct rexlang_vm *vm)
 	if (setjmp(vm->err.j)) {
 		// we get here only if throw_error() (aka longjmp) is called
 		// return error code; additional details found in vm->err struct:
-		return vm->err.code;
-	}
-
-	// look up stack memory:
-	vm->k = (struct rexlang_stack *)page(vm, vm->sp);
-	if (unlikely(!vm->k)) {
-		throw_error(vm, REXLANG_ERR_PAGE_UNMAPPED);
 		return vm->err.code;
 	}
 
@@ -227,12 +239,22 @@ enum rexlang_error rexlang_exec(struct rexlang_vm *vm)
 	return vm->err.code;
 }
 
-void rexlang_init(struct rexlang_vm *vm, rexlang_mem_f m)
-{
+void rexlang_vm_init(
+	struct rexlang_vm *vm,
+	size_t m_size,
+	uint8_t* m,
+	size_t d_size,
+	uint8_t* d,
+	struct rexlang_stack* k
+) {
 	assert(vm && "vm cannot be NULL");
 	assert(m && "m cannot be NULL");
+	assert(d && "d cannot be NULL");
+	assert(k && "k cannot be NULL");
 	vm->m = m;
-	vm->ip = 0x8000;
-	vm->sp = 0xFF00 + 224;
+	vm->d = d;
+	vm->k = k;
+	vm->ip = 0;
+	vm->sp = 224;
 	vm->err.code = REXLANG_ERR_SUCCESS;
 }
