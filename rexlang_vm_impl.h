@@ -1,0 +1,213 @@
+
+#include <stdint.h>
+#include "rexlang_vm.h"
+
+#define   likely(x) __builtin_expect((x), 1)
+#define unlikely(x) __builtin_expect((x), 0)
+
+// using uint_fastX_t makes a big code-size difference for ARM thumb
+typedef uint_fast8_t  u8;
+typedef uint_fast16_t u16;
+
+#define TY_U8  0
+#define TY_U16 1
+
+// OR the two type bits together to find the bigger size (any 1 wins)
+#define tmax(a,b) ((a) | (b))
+
+#define throw_error(vm, e) { \
+	vm->err.file = __FILE__; \
+	vm->err.line = __LINE__; \
+	vm->err.code = e; \
+	longjmp(vm->err.j, vm->err.code); \
+}
+
+#ifdef REXLANG_NO_BOUNDS_CHECK
+#  define bounds_check_data(vm, p)
+#else
+#  define bounds_check_data(vm, p) \
+	if (unlikely(p >= vm->d_size)) throw_error(vm, REXLANG_ERR_DATA_ADDRESS_OUT_OF_BOUNDS)
+#endif
+
+// read from data
+static inline u8 rddu8(struct rexlang_vm* vm, u16 p)
+{
+	bounds_check_data(vm, p);
+	return vm->d[p];
+}
+
+// read from data
+static inline u16 rddu16(struct rexlang_vm* vm, u16 p)
+{
+	bounds_check_data(vm, p);
+	u16 lo = vm->d[p+0];
+	u16 hi = vm->d[p+1];
+	u16 val = ((hi)<<8) | (lo);
+	return val;
+}
+
+// write to data
+static inline void wrdu8(struct rexlang_vm* vm, u16 p, u8 v)
+{
+	bounds_check_data(vm, p);
+	vm->d[p] = v;
+}
+
+// write to data
+static inline void wrdu16(struct rexlang_vm* vm, u16 p, u16 v)
+{
+	bounds_check_data(vm, p);
+	vm->d[p+0] = v;
+	vm->d[p+1] = v >> 8;
+}
+
+// read, advance pointer
+static inline u8 rdau8(uint8_t* m, u16 *p)
+{
+	return m[*p++];
+}
+
+// read, advance pointer
+static inline u16 rdau16(uint8_t* m, u16 *p)
+{
+	assert(m);
+	u16 a = *p;
+	u16 lo = m[a+0];
+	u16 hi = m[a+1];
+	u16 val = ((hi)<<8) | (lo);
+	*p += 2;
+	return val;
+}
+
+// read from IP, advance IP
+static inline u8 rdipu8(struct rexlang_vm *vm)
+{
+	return rdau8(vm->m, &vm->ip);
+}
+
+// read from IP, advance IP
+static inline u16 rdipu16(struct rexlang_vm *vm)
+{
+	return rdau16(vm->m, &vm->ip);
+}
+
+// write, no-advance pointer
+static inline void wrnu8(uint8_t* m, u16 p, u8 v)
+{
+	assert(m);
+	m[p] = v;
+}
+
+// write, no-advance pointer
+static inline void wrnu16(uint8_t* m, u16 p, u16 v)
+{
+	assert(m);
+	m[p+0] = v;
+	m[p+1] = v >> 8;
+}
+
+static inline void push_u8(struct rexlang_vm *vm, u8 v)
+{
+	if (unlikely(vm->sp == 0)) {
+		throw_error(vm, REXLANG_ERR_STACK_FULL);
+		return;
+	}
+
+	struct rexlang_stack *k = vm->k;
+
+	// write the value into the stack:
+	vm->sp--;
+	wrnu8(k->s, vm->sp, v);
+	// update type bits:
+	k->t[k->c >> 5] &= ~(1UL<<(k->c & 31));
+	k->c++;
+}
+
+static inline void push_u16(struct rexlang_vm *vm, u16 v)
+{
+	if (unlikely(vm->sp <= 1)) {
+		throw_error(vm, REXLANG_ERR_STACK_FULL);
+		return;
+	}
+
+	struct rexlang_stack *k = vm->k;
+
+	// write the value into the stack:
+	vm->sp -= 2;
+	wrnu16(k->s, vm->sp, v);
+	// update type bits:
+	k->t[k->c >> 5] |= 1UL<<(k->c & 31);
+	k->c++;
+}
+
+static inline void push(struct rexlang_vm *vm, u16 v, u8 ty)
+{
+	if (ty == TY_U8) {
+		push_u8(vm, v);
+	} else {
+		push_u16(vm, v);
+	}
+}
+
+static inline u8 pop_u8(struct rexlang_vm *vm)
+{
+	if (unlikely(vm->sp >= 0xE0)) {
+		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
+		return 0xFF;
+	}
+
+	struct rexlang_stack *k = vm->k;
+
+	// read type bits:
+	if (unlikely((k->t[k->c >> 5] & (1UL<<(k->c & 31))) != 0)) {
+		throw_error(vm, REXLANG_ERR_POP_EXPECTED_U8);
+		return 0xFF;
+	};
+	k->c--;
+
+	// read the value from the stack and move the sp:
+	return rdau8(k->s, &vm->sp);
+}
+
+static inline u16 pop_u16(struct rexlang_vm *vm)
+{
+	if (unlikely(vm->sp >= 0xE0)) {
+		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
+		return 0xFF;
+	}
+
+	struct rexlang_stack *k = vm->k;
+
+	// read type bits:
+	if (unlikely((k->t[k->c >> 5] & (1UL<<(k->c & 31))) == 0)) {
+		throw_error(vm, REXLANG_ERR_POP_EXPECTED_U16);
+		return 0xFF;
+	};
+	k->c--;
+
+	// read the value from the stack and move the sp:
+	return rdau16(k->s, &vm->sp);
+}
+
+static inline u16 pop(struct rexlang_vm *vm, u8 *type_out)
+{
+	if (unlikely(vm->sp >= 0xE0)) {
+		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
+		return 0xFF;
+	}
+
+	struct rexlang_stack *k = vm->k;
+
+	// read type bits:
+	u8 ty = (k->t[k->c >> 5] & (1UL<<(k->c & 31))) != 0;
+	k->c--;
+
+	*type_out = ty;
+
+	// read the value from the stack and move the sp:
+	if (ty == TY_U8) {
+		return rdau8(k->s, &vm->sp);
+	} else {
+		return rdau16(k->s, &vm->sp);
+	}
+}
