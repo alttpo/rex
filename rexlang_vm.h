@@ -13,8 +13,13 @@ struct rexlang_stack {
 
 _Static_assert(sizeof(struct rexlang_stack) == 256, "stack must be 256 bytes");
 
+struct rexlang_vm;
+
+typedef void (*rexlang_call_f)(struct rexlang_vm* vm, uint_fast16_t fn);
+
 enum rexlang_error {
 	REXLANG_ERR_SUCCESS = 0,
+	REXLANG_ERR_HALTED,
 	REXLANG_ERR_BAD_OPCODE,
 	REXLANG_ERR_STACK_EMPTY,
 	REXLANG_ERR_STACK_FULL,
@@ -34,6 +39,9 @@ struct rexlang_vm {
 	uint_fast16_t ip;           // instruction pointer
 	uint_fast16_t sp;           // stack pointer to free position
 
+	rexlang_call_f syscall;
+	rexlang_call_f extcall;
+
 	// details of last error iff code != REXLANG_ERR_SUCCESS:
 	struct {
 		enum rexlang_error code;
@@ -50,9 +58,18 @@ void rexlang_vm_init(
 	uint8_t* m,
 	size_t d_size,
 	uint8_t* d,
-	struct rexlang_stack* k
+	struct rexlang_stack* k,
+	rexlang_call_f syscall,
+	rexlang_call_f extcall
 );
 
-enum rexlang_error rexlang_vm_exec(struct rexlang_vm *vm);
+// explicitly reset the VM to initial state:
+void rexlang_vm_reset(struct rexlang_vm *vm);
+
+// this must be called after an error occurs to resume execution:
+void rexlang_vm_error_ack(struct rexlang_vm *vm);
+
+// execute the given number of instructions or until an error occurs
+enum rexlang_error rexlang_vm_exec(struct rexlang_vm *vm, uint_fast16_t instruction_count);
 
 #endif

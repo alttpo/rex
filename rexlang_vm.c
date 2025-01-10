@@ -14,6 +14,11 @@ static void opcode(struct rexlang_vm *vm, u16 x)
 	u8 tb;
 	u8 tc;
 
+	if (x == 0) { // halt
+		vm->err.code = REXLANG_ERR_HALTED;
+		return;
+	}
+
 	if ((x & 0xF0) == 0x20) { // 010xxxx shlx
 		a = pop(vm, &ta);
 		push(vm, a << (x & 0x0F), ta);
@@ -43,6 +48,8 @@ static void opcode(struct rexlang_vm *vm, u16 x)
 		push_u16(vm, b);
 		return;
 	} else switch (x) {
+	case 0x01: // nop
+		break;
 	case 0x02: { // 0000010 call
 		a = pop(vm, &ta);
 		push_u16(vm, vm->ip);
@@ -237,16 +244,17 @@ static void opcode(struct rexlang_vm *vm, u16 x)
 	}
 }
 
-enum rexlang_error rexlang_vm_exec(struct rexlang_vm *vm)
+enum rexlang_error rexlang_vm_exec(struct rexlang_vm *vm, uint_fast16_t instruction_count)
 {
 	assert(vm->m);
 	assert(vm->d);
 	assert(vm->k);
 
-	// reset error state:
-	vm->err.code = REXLANG_ERR_SUCCESS;
-	vm->err.file = NULL;
-	vm->err.line = 0;
+	// require an explicit error acknowledgement:
+	if (vm->err.code != REXLANG_ERR_SUCCESS) {
+		return vm->err.code;
+	}
+
 	// mark longjmp destination for error handling:
 	if (setjmp(vm->err.j)) {
 		// we get here only if throw_error() (aka longjmp) is called
@@ -254,46 +262,81 @@ enum rexlang_error rexlang_vm_exec(struct rexlang_vm *vm)
 		return vm->err.code;
 	}
 
-	// read instruction:
-	u8 o = rdipu8(vm);
-	if ((o & 0xC0) == 0) {
-		// push u8 value:
-		push_u8(vm, o);
-	} else if ((o & 0xC0) == 0x40) {
-		// push up to 4 mixed values:
-		int x = (o & 3) + 1;
-		while (x--) {
-			if (o & 4) {
-				u16 v = rdipu16(vm);
-				push_u16(vm, v);
-			} else {
-				u16 v = rdipu8(vm);
-				push_u8(vm, v);
+	while ((vm->err.code == REXLANG_ERR_SUCCESS) && instruction_count--) {
+		// read instruction:
+		u8 o = rdipu8(vm);
+		if ((o & 0xC0) == 0x80) {
+			// push u8 value:
+			push_u8(vm, o);
+		} else if ((o & 0xC0) == 0xC0) {
+			// push up to 4 mixed values:
+			int x = (o & 3) + 1;
+			while (x--) {
+				if (o & 4) {
+					u16 v = rdipu16(vm);
+					push_u16(vm, v);
+				} else {
+					u16 v = rdipu8(vm);
+					push_u8(vm, v);
+				}
+				o >>= 1;
 			}
-			o >>= 1;
+		} else if (o == 0x7D) {
+			// syscall:
+			u16 x = rdipu8(vm);
+			if (x & 0x80) {
+				// extended call number:
+				x = ((u16)x & 0x7F) | (((u16)rdipu8(vm))<<8);
+			} else {
+				x &= 0x7F;
+			}
+			if (vm->syscall) {
+				vm->syscall(vm, x);
+			}
+		} else if (o == 0x7E) {
+			// extcall:
+			u16 x = rdipu8(vm);
+			if (x & 0x80) {
+				// extended call number:
+				x = ((u16)x & 0x7F) | (((u16)rdipu8(vm))<<8);
+			} else {
+				x &= 0x7F;
+			}
+			if (vm->extcall) {
+				vm->extcall(vm, x);
+			}
+		} else if (o == 0x7F) {
+			// opcode-ext:
+			u16 x = (u16)rdipu8(vm) + 0x80;
+			opcode(vm, x);
+		} else {
+			// opcode:
+			u16 x = (o & 0x7F);
+			opcode(vm, x);
 		}
-	} else if (o == 0x80) {
-		// syscall:
-		u8 x = rdipu8(vm);
-	} else if (o == 0x81) {
-		// extcall:
-		u16 x = rdipu16(vm);
-	} else if (o == 0xFD) {
-		// prgm-enter:
-		u16 x = rdipu16(vm);
-	} else if (o == 0xFE) {
-		// prgm-end:
-	} else if (o == 0xFF) {
-		// opcode-ext:
-		u16 x = rdipu8(vm) + 0x80;
-		opcode(vm, x);
-	} else {
-		// opcode:
-		u16 x = (o & 0x7F);
-		opcode(vm, x);
 	}
 
 	return vm->err.code;
+}
+
+void rexlang_vm_error_ack(struct rexlang_vm *vm)
+{
+	// reset error state:
+	vm->err.code = REXLANG_ERR_SUCCESS;
+	vm->err.file = NULL;
+	vm->err.line = 0;
+}
+
+void rexlang_vm_reset(struct rexlang_vm *vm)
+{
+	// reset IP and SP:
+	vm->ip = 0;
+	vm->sp = 224;
+	// we do not clear program memory nor data memory.
+	// clear stack:
+	memset(vm->k, 0, sizeof(struct rexlang_stack));
+	// clear error status:
+	rexlang_vm_error_ack(vm);
 }
 
 void rexlang_vm_init(
@@ -302,7 +345,9 @@ void rexlang_vm_init(
 	uint8_t* m,
 	size_t d_size,
 	uint8_t* d,
-	struct rexlang_stack* k
+	struct rexlang_stack* k,
+	rexlang_call_f syscall,
+	rexlang_call_f extcall
 ) {
 	assert(vm && "vm cannot be NULL");
 	assert(m && "m cannot be NULL");
@@ -315,7 +360,8 @@ void rexlang_vm_init(
 	vm->d_size = d_size;
 	vm->k = k;
 
-	vm->ip = 0;
-	vm->sp = 224;
-	vm->err.code = REXLANG_ERR_SUCCESS;
+	vm->syscall = syscall;
+	vm->extcall = extcall;
+
+	rexlang_vm_reset(vm);
 }

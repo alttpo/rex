@@ -56,14 +56,14 @@ Alpha characters are treated as bits that represent an N-bit unsigned integer or
 ### Instructions
 | Type                | Format                       | Description                                                    |
 | ------------------- | ---------------------------- | -------------------------------------------------------------- |
-| push-u8             | `00xxxxxx`                   | push `x` (0..$3F) as a `u8` value                              |
-| push-4-mixed-values | `01dcbaxx` [x+1 values]      | push `x+1` (1..$4) values of mixed sizes (`a`..`d`=`u8`/`u16`) |
-| prgm-enter          | `11111101_aaaaaaaa_aaaaaaaa` | start writing to program memory at `a`                         |
-| prgm-end            | `11111110`                   | stop writing to program memory                                 |
-| syscall             | `10000000_xxxxxxxx`          | invoke system function `x` (0..$FF)                            |
-| extcall             | `10000001_xxxxxxxx_xxxxxxxx` | invoke extension function `x` (0..$FFFF)                       |
-| opcode              | `1xxxxxxx`                   | invoke opcode     `x` (  0.. $7C)                              |
-| opcode-ext          | `11111111_xxxxxxxx`          | invoke opcode `x+$80` ($80..$17F)                              |
+| syscall             | `01111101_0xxxxxxx`          | invoke system function `x` (0..$7F)                            |
+| syscall-ext         | `01111101_1xxxxxxx_xxxxxxxx` | invoke system function `x` ($80..$7FFF)                        |
+| extcall             | `01111110_0xxxxxxx`          | invoke extension function `x` (0..$7F)                         |
+| extcall-ext         | `01111110_1xxxxxxx_xxxxxxxx` | invoke extension function `x` ($80..$7FFF)                     |
+| opcode              | `0xxxxxxx`                   | invoke opcode     `x` (  0.. $7C)                              |
+| opcode-ext          | `01111111_xxxxxxxx`          | invoke opcode `x+$80` ($80..$17F)                              |
+| push-u8             | `10xxxxxx`                   | push `x` (0..$3F) as a `u8` value                              |
+| push-4-mixed-values | `11dcbaxx` [x+1 values]      | push `x+1` (1..$4) values of mixed sizes (`a`..`d`=`u8`/`u16`) |
 
 The `push-u8` instruction pushes the literal value (0..$3F) as a `u8` onto the stack. For larger values use the `push-4-mixed-values` instruction.
 
@@ -82,8 +82,8 @@ Otherwise the opcode `x` is executed.
 ### Opcodes
 | Format    | Name          | a type | b type | c type | result type | computation                                |
 | --------- | ------------- | ------ | ------ | ------ | ----------- | ------------------------------------------ |
-| `0000000` | RESERVED      |        |        |        |             |                                            |
-| `0000001` | RESERVED      |        |        |        |             |                                            |
+| `0000000` | halt          |        |        |        |             |                                            |
+| `0000001` | nop           |        |        |        |             |                                            |
 | `0000010` | call          | a      |        |        |             | push IP; IP=a                              |
 | `0000011` | jump / return | a      |        |        |             | IP=a                                       |
 | `0000100` | jump-if       | a      | b      |        |             | IP=a if b != 0                             |
@@ -108,18 +108,18 @@ Otherwise the opcode `x` is executed.
 | `0010111` | mul           | a      | b      |        | max         | `a *  b`                                   |
 | `0011000` | inc           | a      |        |        | a           | `++a`                                      |
 | `0011001` | dec           | a      |        |        | a           | `--a`                                      |
-| `0011010` | ld-u8         | *u8    |        |        | u8          | `*( u8*)(&M[a])`                           |
-| `0011011` | ld-u16        | *u16   |        |        | u16         | `*(u16*)(&M[a])`                           |
-| `0011100` | st-u8         | *u8    | u8     |        | u8          | `*( u8*)(&M[a]) = b`                       |
-| `0011101` | st-u16        | *u16   | u16    |        | u16         | `*(u16*)(&M[a]) = b`                       |
+| `0011010` | ld-u8         | *u8    |        |        | u8          | `*( u8*)(&m[a])`                           |
+| `0011011` | ld-u16        | *u16   |        |        | u16         | `*(u16*)(&m[a])`                           |
+| `0011100` | st-u8         | *u8    | u8     |        | u8          | `*( u8*)(&m[a]) = b`                       |
+| `0011101` | st-u16        | *u16   | u16    |        | u16         | `*(u16*)(&m[a]) = b`                       |
 | `0011110` | shl           | a      | b      |        | a           | `a << b`                                   |
 | `0011111` | shr           | a      | b      |        | a           | `a >> b`                                   |
 | `010xxxx` | shlx          | a      |        |        | a           | `a << x`                                   |
 | `011xxxx` | shrx          | a      |        |        | a           | `a >> x`                                   |
-| `1000xxx` | ld-u8-offs    | *u8    |        |        | u8          | `*( u8*)(&M[a+x+1])`                       |
-| `1001xxx` | ld-u16-offs   | *u16   |        |        | u16         | `*(u16*)(&M[a+x+1])`                       |
-| `1010xxx` | st-u8-offs    | *u8    | u8     |        | u8          | `*( u8*)(&M[a+x+1]) = b`                   |
-| `1011xxx` | st-u16-offs   | *u16   | u16    |        | u16         | `*(u16*)(&M[a+x+1]) = b`                   |
+| `1000xxx` | ld-u8-offs    | *u8    |        |        | u8          | `*( u8*)(&m[a+x+1])`                       |
+| `1001xxx` | ld-u16-offs   | *u16   |        |        | u16         | `*(u16*)(&m[a+x+1])`                       |
+| `1010xxx` | st-u8-offs    | *u8    | u8     |        | u8          | `*( u8*)(&m[a+x+1]) = b`                   |
+| `1011xxx` | st-u16-offs   | *u16   | u16    |        | u16         | `*(u16*)(&m[a+x+1]) = b`                   |
 | `1100000` | copy          | *u8    | *u8    | c      | *u8         | copy `c` bytes from `b` to `a`; push `a+c` |
 | `1100001` |               |        |        |        |             |                                            |
 | `1100010` |               |        |        |        |             |                                            |
