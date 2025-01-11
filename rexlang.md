@@ -53,103 +53,142 @@ Bits are listed from most-significant bit (MSB) to least-significant bit (LSB) f
 
 Alpha characters are treated as bits that represent an N-bit unsigned integer ordered most-significant to least-significant bit from left to right. Bits are grouped in octets, aka bytes, in little-endian order with the least significant byte first.
 
-### Instructions
-| Type                | Format                       | Description                                                    |
-| ------------------- | ---------------------------- | -------------------------------------------------------------- |
-| syscall             | `01111101_0xxxxxxx`          | invoke system function `x` (0..$7F)                            |
-| syscall-ext         | `01111101_1xxxxxxx_xxxxxxxx` | invoke system function `x` ($80..$7FFF)                        |
-| extcall             | `01111110_0xxxxxxx`          | invoke extension function `x` (0..$7F)                         |
-| extcall-ext         | `01111110_1xxxxxxx_xxxxxxxx` | invoke extension function `x` ($80..$7FFF)                     |
-| opcode              | `0xxxxxxx`                   | invoke opcode     `x` (  0.. $7C)                              |
-| opcode-ext          | `01111111_xxxxxxxx`          | invoke opcode `x+$80` ($80..$17F)                              |
-| push-u8             | `10xxxxxx`                   | push `x` (0..$3F) as a `u8` value                              |
-| push-4-mixed-values | `11dcbaxx` [x+1 values]      | push `x+1` (1..$4) values of mixed sizes (`a`..`d`=`u8`/`u16`) |
-
-The `push-u8` instruction pushes the literal value (0..$3F) as a `u8` onto the stack. For larger values use the `push-4-mixed-values` instruction.
-
-The `push-4-mixed-values` instruction pushes `x+1` (between 1 and 4) mixed sized values onto the stack. Each value has its own sized specified with `0` for `u8` and `1` for `u16`. `a` specifies the first value's size, `b` specifies the second value's size, and so on. Only `x+1` number of values are consumed.
-
-Otherwise the opcode `x` is executed.
+### Opcodes
+| Format                       | Name              | a type | b type | c type | result type | computation                                                    |
+| ---------------------------- | ----------------- | ------ | ------ | ------ | ----------- | -------------------------------------------------------------- |
+| `00000000`                   | halt              |        |        |        |             |                                                                |
+| `00000001`                   | discard           | a      |        |        |             | discards `a`                                                   |
+| `00000010`                   | dcopy             | *u8    | *u8    | c      | *u8         | copy `c` bytes from `data[b]` to `data[a]`; push `a+c`         |
+| `00000011`                   | pcopy             | *u8    | *u8    | c      | *u8         | copy `c` bytes from `prgm[b]` to `data[a]`; push `a+c`         |
+| `00000100`                   | swap              | a      | b      |        |             | push a; push b                                                 |
+| `00000101`                   | call              | a      |        |        |             | push IP; IP=x                                                  |
+| `00000110`                   | return / jump     | a      |        |        |             | IP=a                                                           |
+| `00000111`                   | jump-if           | a      | b      |        |             | IP=a if b != 0                                                 |
+| `00001000`                   | jump-if-not       | a      | b      |        |             | IP=a if b == 0                                                 |
+| `00001001`                   | syscall           | a      |        |        |             | invoke    system function `a`                                  |
+| `00001010`                   | extcall           | a      |        |        |             | invoke extension function `a`                                  |
+| `00001011`                   | eq                | a      | b      |        | u16         | `a == b`                                                       |
+| `00001100`                   | ne                | a      | b      |        | u16         | `a != b`                                                       |
+| `00001101`                   | le                | a      | b      |        | u16         | `a <= b`                                                       |
+| `00001110`                   | gt                | a      | b      |        | u16         | `a >  b`                                                       |
+| `00001111`                   | lt                | a      | b      |        | u16         | `a <  b`                                                       |
+| `00010000`                   | ge                | a      | b      |        | u16         | `a >= b`                                                       |
+| `00010001`                   | and               | a      | b      |        | u16         | `a &  b`                                                       |
+| `00010010`                   | or                | a      | b      |        | u16         | `a \| b`                                                       |
+| `00010011`                   | xor               | a      | b      |        | u16         | `a ^  b`                                                       |
+| `00010100`                   | add               | a      | b      |        | u16         | `a +  b`                                                       |
+| `00010101`                   | sub               | a      | b      |        | u16         | `a -  b`                                                       |
+| `00010110`                   | mul               | a      | b      |        | u16         | `a *  b`                                                       |
+| `00010111`                   | shl               | a      | b      |        | a           | `a << b`                                                       |
+| `00011000`                   | shr               | a      | b      |        | a           | `a >> b`                                                       |
+| `00011001`                   | inc               | a      |        |        | a           | `++a`                                                          |
+| `00011010`                   | dec               | a      |        |        | a           | `--a`                                                          |
+| `00011011`                   | not               | a      |        |        | a           | `!a`                                                           |
+| `00011100`                   | neg               | a      |        |        | a           | `-a`                                                           |
+| `00011101`                   | ld-u8             | *u8    |        |        | u8          | `*( u8*)(&data[a])`                                            |
+| `00011110`                   | ld-u16            | *u16   |        |        | u16         | `*(u16*)(&data[a])`                                            |
+| `00011111`                   | ld-u8--offs       | *u8    | u16    |        | u8          | `*( u8*)(&data[a+b])`                                          |
+| `00100000`                   | ld-u16-offs       | *u16   | u16    |        | u16         | `*(u16*)(&data[a+b])`                                          |
+| `00100001`                   | st-u8             | *u8    | u8     |        | u8          | `*( u8*)(&data[a]) = b`                                        |
+| `00100010`                   | st-u16            | *u16   | u16    |        | u16         | `*(u16*)(&data[a]) = b`                                        |
+| `00100011`                   | st-u8--offs       | *u8    | u16    | u8     | u8          | `*( u8*)(&data[a+b]) = c`                                      |
+| `00100100`                   | st-u16-offs       | *u16   | u16    | u16    | u16         | `*(u16*)(&data[a+b]) = c`                                      |
+| `00100101_xxxxxxxx`          | eq--imm8          | a      |        |        | u16         | `a == x`                                                       |
+| `00100110_xxxxxxxx`          | ne--imm8          | a      |        |        | u16         | `a != x`                                                       |
+| `00100111_xxxxxxxx`          | le--imm8          | a      |        |        | u16         | `a <= x`                                                       |
+| `00101000_xxxxxxxx`          | gt--imm8          | a      |        |        | u16         | `a >  x`                                                       |
+| `00101001_xxxxxxxx`          | lt--imm8          | a      |        |        | u16         | `a <  x`                                                       |
+| `00101010_xxxxxxxx`          | ge--imm8          | a      |        |        | u16         | `a >= x`                                                       |
+| `00101011_xxxxxxxx`          | and-imm8          | a      |        |        | u16         | `a &  x`                                                       |
+| `00101100_xxxxxxxx`          | or--imm8          | a      |        |        | u16         | `a \| x`                                                       |
+| `00101101_xxxxxxxx`          | xor-imm8          | a      |        |        | u16         | `a ^  x`                                                       |
+| `00101110_xxxxxxxx`          | add-imm8          | a      |        |        | u16         | `a +  x`                                                       |
+| `00101111_xxxxxxxx`          | sub-imm8          | a      |        |        | u16         | `a -  x`                                                       |
+| `00110000_xxxxxxxx`          | mul-imm8          | a      |        |        | u16         | `a *  x`                                                       |
+| `00110001_0000xxxx`          | shl-imm4          | a      |        |        | u16         | `a << x`                                                       |
+| `00110010_0000xxxx`          | shr-imm4          | a      |        |        | u16         | `a >> x`                                                       |
+| `00110011_xxxxxxxx`          | ld-u8--imm8       |        |        |        | u8          | `*( u8*)(&data[x])`                                            |
+| `00110100_xxxxxxxx`          | ld-u16-imm8       |        |        |        | u16         | `*(u16*)(&data[x])`                                            |
+| `00110101_xxxxxxxx`          | ld-u8--offs-imm8  | *u8    |        |        | u8          | `*( u8*)(&data[a+x])`                                          |
+| `00110110_xxxxxxxx`          | ld-u16-offs-imm8  | *u16   |        |        | u16         | `*(u16*)(&data[a+x])`                                          |
+| `00110111_xxxxxxxx`          | st-u8--imm8       | u8     |        |        | u8          | `*( u8*)(&data[x]) = a`                                        |
+| `00111000_xxxxxxxx`          | st-u16-imm8       | u16    |        |        | u16         | `*(u16*)(&data[x]) = a`                                        |
+| `00111001_xxxxxxxx`          | st-u8--offs-imm8  | *u8    | u8     |        | u8          | `*( u8*)(&data[a+x]) = b`                                      |
+| `00111010_xxxxxxxx`          | st-u16-offs-imm8  | *u16   | u16    |        | u16         | `*(u16*)(&data[a+x]) = b`                                      |
+| `00111011_xxxxxxxx`          | call-imm8         |        |        |        |             | push IP; IP=x                                                  |
+| `00111100_xxxxxxxx`          | jump-imm8         |        |        |        |             | IP=x                                                           |
+| `00111101_xxxxxxxx`          | jump-imm8-if      | a      |        |        |             | IP=x if a != 0                                                 |
+| `00111110_xxxxxxxx`          | jump-imm8-if-not  | a      |        |        |             | IP=x if a == 0                                                 |
+| `00111111_xxxxxxxx`          | syscall-imm8      |        |        |        |             | invoke    system function `x`                                  |
+| `01000000_xxxxxxxx`          | extcall-imm8      |        |        |        |             | invoke extension function `x`                                  |
+| `01000001_xxxxxxxx_xxxxxxxx` | eq--imm16         | a      |        |        | u16         | `a == x`                                                       |
+| `01000010_xxxxxxxx_xxxxxxxx` | ne--imm16         | a      |        |        | u16         | `a != x`                                                       |
+| `01000011_xxxxxxxx_xxxxxxxx` | le--imm16         | a      |        |        | u16         | `a <= x`                                                       |
+| `01000100_xxxxxxxx_xxxxxxxx` | gt--imm16         | a      |        |        | u16         | `a >  x`                                                       |
+| `01000101_xxxxxxxx_xxxxxxxx` | lt--imm16         | a      |        |        | u16         | `a <  x`                                                       |
+| `01000110_xxxxxxxx_xxxxxxxx` | ge--imm16         | a      |        |        | u16         | `a >= x`                                                       |
+| `01000111_xxxxxxxx_xxxxxxxx` | and-imm16         | a      |        |        | u16         | `a &  x`                                                       |
+| `01001000_xxxxxxxx_xxxxxxxx` | or--imm16         | a      |        |        | u16         | `a \| x`                                                       |
+| `01001001_xxxxxxxx_xxxxxxxx` | xor-imm16         | a      |        |        | u16         | `a ^  x`                                                       |
+| `01001010_xxxxxxxx_xxxxxxxx` | add-imm16         | a      |        |        | u16         | `a +  x`                                                       |
+| `01001011_xxxxxxxx_xxxxxxxx` | sub-imm16         | a      |        |        | u16         | `a -  x`                                                       |
+| `01001100_xxxxxxxx_xxxxxxxx` | mul-imm16         | a      |        |        | u16         | `a *  x`                                                       |
+| `01001101_xxxxxxxx_xxxxxxxx` | ld-u8--imm16      |        |        |        | u8          | `*( u8*)(&data[x])`                                            |
+| `01001110_xxxxxxxx_xxxxxxxx` | ld-u16-imm16      |        |        |        | u16         | `*(u16*)(&data[x])`                                            |
+| `01001111_xxxxxxxx_xxxxxxxx` | ld-u8--offs-imm16 | *u8    |        |        | u8          | `*( u8*)(&data[a+x])`                                          |
+| `01010000_xxxxxxxx_xxxxxxxx` | ld-u16-offs-imm16 | *u16   |        |        | u16         | `*(u16*)(&data[a+x])`                                          |
+| `01010001_xxxxxxxx_xxxxxxxx` | st-u8--imm16      | u8     |        |        | u8          | `*( u8*)(&data[x]) = a`                                        |
+| `01010010_xxxxxxxx_xxxxxxxx` | st-u16-imm16      | u16    |        |        | u16         | `*(u16*)(&data[x]) = a`                                        |
+| `01010011_xxxxxxxx_xxxxxxxx` | st-u8--offs-imm16 | *u8    | u8     |        | u8          | `*( u8*)(&data[a+x]) = b`                                      |
+| `01010100_xxxxxxxx_xxxxxxxx` | st-u16-offs-imm16 | *u16   | u16    |        | u16         | `*(u16*)(&data[a+x]) = b`                                      |
+| `01010101_xxxxxxxx_xxxxxxxx` | call-imm16        |        |        |        |             | push IP; IP=x                                                  |
+| `01010110_xxxxxxxx_xxxxxxxx` | jump-imm16        |        |        |        |             | IP=x                                                           |
+| `01010111_xxxxxxxx_xxxxxxxx` | jump-imm16-if     | a      |        |        |             | IP=x if a != 0                                                 |
+| `01011000_xxxxxxxx_xxxxxxxx` | jump-imm16-if-not | a      |        |        |             | IP=x if a == 0                                                 |
+| `01011001_xxxxxxxx_xxxxxxxx` | syscall-imm16     |        |        |        |             | invoke    system function `x`                                  |
+| `01011010_xxxxxxxx_xxxxxxxx` | extcall-imm16     |        |        |        |             | invoke extension function `x`                                  |
+| `01011011`                   |                   |        |        |        |             |                                                                |
+| `01011100`                   |                   |        |        |        |             |                                                                |
+| `01011101`                   |                   |        |        |        |             |                                                                |
+| `01011110`                   |                   |        |        |        |             |                                                                |
+| `01011111`                   |                   |        |        |        |             |                                                                |
+| `01100000`                   |                   |        |        |        |             |                                                                |
+| `01100001`                   |                   |        |        |        |             |                                                                |
+| `01100010`                   |                   |        |        |        |             |                                                                |
+| `01100011`                   |                   |        |        |        |             |                                                                |
+| `01100100`                   |                   |        |        |        |             |                                                                |
+| `01100101`                   |                   |        |        |        |             |                                                                |
+| `01100110`                   |                   |        |        |        |             |                                                                |
+| `01100111`                   |                   |        |        |        |             |                                                                |
+| `01101000`                   |                   |        |        |        |             |                                                                |
+| `01101001`                   |                   |        |        |        |             |                                                                |
+| `01101010`                   |                   |        |        |        |             |                                                                |
+| `01101011`                   |                   |        |        |        |             |                                                                |
+| `01101100`                   |                   |        |        |        |             |                                                                |
+| `01101101`                   |                   |        |        |        |             |                                                                |
+| `01101110`                   |                   |        |        |        |             |                                                                |
+| `01101111`                   |                   |        |        |        |             |                                                                |
+| `01110000`                   |                   |        |        |        |             |                                                                |
+| `01110001`                   |                   |        |        |        |             |                                                                |
+| `01110010`                   |                   |        |        |        |             |                                                                |
+| `01110011`                   |                   |        |        |        |             |                                                                |
+| `01110100`                   |                   |        |        |        |             |                                                                |
+| `01110101`                   |                   |        |        |        |             |                                                                |
+| `01110110`                   |                   |        |        |        |             |                                                                |
+| `01110111`                   |                   |        |        |        |             |                                                                |
+| `01111000`                   |                   |        |        |        |             |                                                                |
+| `01111001`                   |                   |        |        |        |             |                                                                |
+| `01111010`                   |                   |        |        |        |             |                                                                |
+| `01111011`                   |                   |        |        |        |             |                                                                |
+| `011111xx` [x+1 bytes]       | opcode-ext        |        |        |        |             | extended opcodes                                               |
+| `10xxxxxx`                   | push-u8           |        |        |        |             | push `x` (0..$3F) value                                        |
+| `11dcbaxx` [x+1 values]      | push-values       |        |        |        |             | push `x+1` (1..$4) values of mixed sizes (`a`..`d`=`u8`/`u16`) |
 
 ### Value formats
 | Format              | Description |
 | ------------------- | ----------- |
 | `xxxxxxxx`          | `u8` value  |
 | `xxxxxxxx_xxxxxxxx` | `u16` value |
-
-### Opcodes
-| Format    | Name          | a type | b type | c type | result type | computation                                |
-| --------- | ------------- | ------ | ------ | ------ | ----------- | ------------------------------------------ |
-| `0000000` | halt          |        |        |        |             |                                            |
-| `0000001` | nop           |        |        |        |             |                                            |
-| `0000010` | call          | a      |        |        |             | push IP; IP=a                              |
-| `0000011` | jump / return | a      |        |        |             | IP=a                                       |
-| `0000100` | jump-if       | a      | b      |        |             | IP=a if b != 0                             |
-| `0000101` | jump-if-not   | a      | b      |        |             | IP=a if b == 0                             |
-| `0000110` | swap          | a      | b      |        |             | push a; push b                             |
-| `0000111` | discard       | a      |        |        |             | discards popped value                      |
-| `0001000` | to-u8         | a      |        |        | u8          | `(u8)(a & 0xFF)`                           |
-| `0001001` | to-u16        | a      |        |        | u16         | `(u16)a`                                   |
-| `0001010` | eq            | a      | b      |        | u8          | `a == b`                                   |
-| `0001011` | ne            | a      | b      |        | u8          | `a != b`                                   |
-| `0001100` | le            | a      | b      |        | u8          | `a <= b`                                   |
-| `0001101` | gt            | a      | b      |        | u8          | `a >  b`                                   |
-| `0001110` | lt            | a      | b      |        | u8          | `a <  b`                                   |
-| `0001111` | ge            | a      | b      |        | u8          | `a >= b`                                   |
-| `0010000` | and           | a      | b      |        | max         | `a &  b`                                   |
-| `0010001` | or            | a      | b      |        | max         | `a \| b`                                   |
-| `0010010` | xor           | a      | b      |        | max         | `a ^  b`                                   |
-| `0010011` | not           | a      |        |        | a           | `!a`                                       |
-| `0010100` | neg           | a      |        |        | a           | `-a`                                       |
-| `0010101` | add           | a      | b      |        | max         | `a +  b`                                   |
-| `0010110` | sub           | a      | b      |        | max         | `a -  b`                                   |
-| `0010111` | mul           | a      | b      |        | max         | `a *  b`                                   |
-| `0011000` | inc           | a      |        |        | a           | `++a`                                      |
-| `0011001` | dec           | a      |        |        | a           | `--a`                                      |
-| `0011010` | ld-u8         | *u8    |        |        | u8          | `*( u8*)(&m[a])`                           |
-| `0011011` | ld-u16        | *u16   |        |        | u16         | `*(u16*)(&m[a])`                           |
-| `0011100` | st-u8         | *u8    | u8     |        | u8          | `*( u8*)(&m[a]) = b`                       |
-| `0011101` | st-u16        | *u16   | u16    |        | u16         | `*(u16*)(&m[a]) = b`                       |
-| `0011110` | shl           | a      | b      |        | a           | `a << b`                                   |
-| `0011111` | shr           | a      | b      |        | a           | `a >> b`                                   |
-| `010xxxx` | shlx          | a      |        |        | a           | `a << x`                                   |
-| `011xxxx` | shrx          | a      |        |        | a           | `a >> x`                                   |
-| `1000xxx` | ld-u8-offs    | *u8    |        |        | u8          | `*( u8*)(&m[a+x+1])`                       |
-| `1001xxx` | ld-u16-offs   | *u16   |        |        | u16         | `*(u16*)(&m[a+x+1])`                       |
-| `1010xxx` | st-u8-offs    | *u8    | u8     |        | u8          | `*( u8*)(&m[a+x+1]) = b`                   |
-| `1011xxx` | st-u16-offs   | *u16   | u16    |        | u16         | `*(u16*)(&m[a+x+1]) = b`                   |
-| `1100000` | copy          | *u8    | *u8    | c      | *u8         | copy `c` bytes from `b` to `a`; push `a+c` |
-| `1100001` |               |        |        |        |             |                                            |
-| `1100010` |               |        |        |        |             |                                            |
-| `1100011` |               |        |        |        |             |                                            |
-| `1100100` |               |        |        |        |             |                                            |
-| `1100101` |               |        |        |        |             |                                            |
-| `1100110` |               |        |        |        |             |                                            |
-| `1100111` |               |        |        |        |             |                                            |
-| `1101000` |               |        |        |        |             |                                            |
-| `1101001` |               |        |        |        |             |                                            |
-| `1101010` |               |        |        |        |             |                                            |
-| `1101011` |               |        |        |        |             |                                            |
-| `1101100` |               |        |        |        |             |                                            |
-| `1101101` |               |        |        |        |             |                                            |
-| `1101110` |               |        |        |        |             |                                            |
-| `1101111` |               |        |        |        |             |                                            |
-| `1110000` |               |        |        |        |             |                                            |
-| `1110001` |               |        |        |        |             |                                            |
-| `1110010` |               |        |        |        |             |                                            |
-| `1110011` |               |        |        |        |             |                                            |
-| `1110100` |               |        |        |        |             |                                            |
-| `1110101` |               |        |        |        |             |                                            |
-| `1110110` |               |        |        |        |             |                                            |
-| `1110111` |               |        |        |        |             |                                            |
-| `1111000` |               |        |        |        |             |                                            |
-| `1111001` |               |        |        |        |             |                                            |
-| `1111010` |               |        |        |        |             |                                            |
-| `1111011` |               |        |        |        |             |                                            |
-| `1111100` |               |        |        |        |             |                                            |
-| `1111101` | RESERVED      |        |        |        |             |                                            |
-| `1111110` | RESERVED      |        |        |        |             |                                            |
-| `1111111` | RESERVED      |        |        |        |             |                                            |
 
 ## Standard Function Library
 | Code | Definition | Description |
