@@ -113,6 +113,31 @@ static inline void wrnu16(uint8_t* m, u16 p, u16 v)
 	m[p+1] = v >> 8;
 }
 
+static void typush(struct rexlang_vm *vm, uint32_t c)
+{
+	uint32_t cn;
+	vm->kc++;
+	for (unsigned int i = 0; i < (vm->kc) >> 5; i++) {
+		cn = (vm->kt[i] & 0x8000) >> 31;
+		vm->kt[i] = (vm->kt[i] << 1) | c;
+		c = cn;
+	}
+}
+
+static u8 typop(struct rexlang_vm *vm)
+{
+	u8 ret = vm->kt[0] & 1;
+	uint32_t c = 0;
+	unsigned int i = vm->kc >> 5;
+	while (i--) {
+		vm->kt[i] = (vm->kt[i] >> 1) | c;
+		c = (vm->kt[i] & 1) << 31;
+	}
+	vm->kt[0] = (vm->kt[0] >> 1) | c;
+	vm->kc--;
+	return ret;
+}
+
 static inline void push_u8(struct rexlang_vm *vm, u8 v)
 {
 	if (unlikely(vm->sp == 0)) {
@@ -123,9 +148,9 @@ static inline void push_u8(struct rexlang_vm *vm, u8 v)
 	// write the value into the stack:
 	vm->sp--;
 	wrnu8(vm->ki, vm->sp, v);
+
 	// update type bits:
-	vm->kt[vm->kc >> 5] &= ~(1UL<<(vm->kc & 31));
-	vm->kc++;
+	typush(vm, 0);
 }
 
 static inline void push_u16(struct rexlang_vm *vm, u16 v)
@@ -138,9 +163,9 @@ static inline void push_u16(struct rexlang_vm *vm, u16 v)
 	// write the value into the stack:
 	vm->sp -= 2;
 	wrnu16(vm->ki, vm->sp, v);
+
 	// update type bits:
-	vm->kt[vm->kc >> 5] |= 1UL<<(vm->kc & 31);
-	vm->kc++;
+	typush(vm, 1);
 }
 
 static inline void push(struct rexlang_vm *vm, u16 v, u8 ty)
@@ -154,17 +179,15 @@ static inline void push(struct rexlang_vm *vm, u16 v, u8 ty)
 
 static inline u8 pop_u8(struct rexlang_vm *vm)
 {
-	if (unlikely(vm->sp >= 0xE0)) {
+	if (unlikely(vm->kc == 0)) {
 		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
 		return 0xFF;
 	}
 
-	// read type bits:
-	if (unlikely((vm->kt[vm->kc >> 5] & (1UL<<(vm->kc & 31))) != 0)) {
+	// pop type bit:
+	if (unlikely(typop(vm) != 0)) {
 		throw_error(vm, REXLANG_ERR_POP_EXPECTED_U8);
-		return 0xFF;
-	};
-	vm->kc--;
+	}
 
 	// read the value from the stack and move the sp:
 	return rdau8(vm->ki, &vm->sp);
@@ -172,17 +195,15 @@ static inline u8 pop_u8(struct rexlang_vm *vm)
 
 static inline u16 pop_u16(struct rexlang_vm *vm)
 {
-	if (unlikely(vm->sp >= 0xE0)) {
+	if (unlikely(vm->kc == 0)) {
 		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
 		return 0xFF;
 	}
 
-	// read type bits:
-	if (unlikely((vm->kt[vm->kc >> 5] & (1UL<<(vm->kc & 31))) == 0)) {
+	// pop type bit:
+	if (unlikely(typop(vm) == 0)) {
 		throw_error(vm, REXLANG_ERR_POP_EXPECTED_U16);
-		return 0xFF;
-	};
-	vm->kc--;
+	}
 
 	// read the value from the stack and move the sp:
 	return rdau16(vm->ki, &vm->sp);
@@ -190,15 +211,13 @@ static inline u16 pop_u16(struct rexlang_vm *vm)
 
 static inline u16 pop(struct rexlang_vm *vm, u8 *type_out)
 {
-	if (unlikely(vm->sp >= 0xE0)) {
+	if (unlikely(vm->kc == 0)) {
 		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
 		return 0xFF;
 	}
 
 	// read type bits:
-	u8 ty = (vm->kt[vm->kc >> 5] & (1UL<<(vm->kc & 31))) != 0;
-	vm->kc--;
-
+	u8 ty = typop(vm);
 	*type_out = ty;
 
 	// read the value from the stack and move the sp:
