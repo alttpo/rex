@@ -36,7 +36,7 @@ Pointer types `*T` are only defined for documentation purposes; pointers are sim
 ## Stack
 The stack grows downward from higher memory addresses to lower memory addresses.
 
-All pushes to the stack must record the primitive type of the value pushed. When a value is popped off the stack, its type must be checked against the parameter type it is used in. For example, it is not possible to push a `u16` value to the stack and pop it as a `u8` value or vice versa. If this were allowed it would cause the next stack pop operation to be unaligned and could lead to corrupted results or unpredictable execution behavior.
+All values on the stack must be of size `u16`. This keeps the implementation simple and efficient.
 
 ## Binary program format
 The rexlang binary program format is a compact and machine-friendly representation of a program as it appears in program memory.
@@ -68,8 +68,6 @@ Alpha characters are treated as bits that represent an N-bit unsigned integer or
 The `push-u8` instruction pushes the literal value (0..$3F) as a `u8` onto the stack. For larger values use the `push-4-mixed-values` instruction.
 
 The `push-4-mixed-values` instruction pushes `x+1` (between 1 and 4) mixed sized values onto the stack. Each value has its own sized specified with `0` for `u8` and `1` for `u16`. `a` specifies the first value's size, `b` specifies the second value's size, and so on. Only `x+1` number of values are consumed.
-
-The `prgm-enter` instruction starts writing the subsequent instructions into program memory at address `a` until the `prgm-end` instruction is encountered.
 
 Otherwise the opcode `x` is executed.
 

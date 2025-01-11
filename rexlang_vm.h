@@ -26,7 +26,6 @@ typedef uint_fast16_t rexlang_sp;
 struct rexlang_vm {
 	rexlang_ip ip;          // instruction pointer
 	rexlang_sp sp;          // stack pointer to free position
-	uint_fast8_t  kc;       // stack item count
 	enum rexlang_error err; // enum rexlang_error
 
 	uint8_t* m;             // program memory
@@ -38,8 +37,6 @@ struct rexlang_vm {
 	// setjmp buffer
 	jmp_buf  j;
 
-	uint32_t kt[7];              // stack item type bits
-
 	rexlang_call_f syscall;
 	rexlang_call_f extcall;
 
@@ -49,7 +46,7 @@ struct rexlang_vm {
 	int line;
 #endif
 
-	uint8_t  ki[224];            // stack items
+	uint16_t  ki[128];      // stack items
 };
 
 void rexlang_vm_init(
