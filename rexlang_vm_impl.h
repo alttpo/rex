@@ -24,10 +24,14 @@ typedef uint_fast16_t u16;
 
 #ifdef REXLANG_NO_BOUNDS_CHECK
 #  define bounds_check_data(vm, p)
+#  define bounds_check_prgm(vm, p)
 #else
 #  define bounds_check_data(vm, p) \
 	if (unlikely(p >= vm->d_size)) \
 		throw_error(vm, REXLANG_ERR_DATA_ADDRESS_OUT_OF_BOUNDS)
+#  define bounds_check_prgm(vm, p) \
+	if (unlikely(p >= vm->m_size)) \
+		throw_error(vm, REXLANG_ERR_PRGM_ADDRESS_OUT_OF_BOUNDS)
 #endif
 
 // read from data
