@@ -5,17 +5,9 @@
 #include <stdint.h>
 #include <setjmp.h>
 
-struct rexlang_stack {
-	uint8_t  s[224];    // items
-	uint32_t t[7];      // item type bits
-	uint32_t c;         // item count (32 bits is overkill but it rounds the struct up to 256 bytes)
-};
-
-_Static_assert(sizeof(struct rexlang_stack) == 256, "stack must be 256 bytes");
-
 struct rexlang_vm;
 
-typedef void (*rexlang_call_f)(struct rexlang_vm* vm, uint_fast16_t fn);
+typedef void (*rexlang_call_f)(struct rexlang_vm* vm, uint16_t fn);
 
 enum rexlang_error {
 	REXLANG_ERR_SUCCESS = 0,
@@ -28,37 +20,44 @@ enum rexlang_error {
 	REXLANG_ERR_DATA_ADDRESS_OUT_OF_BOUNDS,
 };
 
+typedef uint_fast16_t rexlang_ip;
+typedef uint_fast16_t rexlang_sp;
+
 struct rexlang_vm {
-	uint8_t *m;                 // program memory
-	uint8_t *d;                 // data memory
-	struct rexlang_stack *k;    // stack memory
+	rexlang_ip ip;          // instruction pointer
+	rexlang_sp sp;          // stack pointer to free position
+	uint_fast8_t  kc;       // stack item count
+	enum rexlang_error err; // enum rexlang_error
 
-	size_t m_size;
-	size_t d_size;
+	uint8_t* m;             // program memory
+	uint8_t* d;             // data memory
 
-	uint_fast16_t ip;           // instruction pointer
-	uint_fast16_t sp;           // stack pointer to free position
+	uint16_t m_size;
+	uint16_t d_size;
+
+	// setjmp buffer
+	jmp_buf  j;
+
+	uint32_t kt[7];              // stack item type bits
 
 	rexlang_call_f syscall;
 	rexlang_call_f extcall;
 
-	// details of last error iff code != REXLANG_ERR_SUCCESS:
-	struct {
-		enum rexlang_error code;
-		const char *file;
-		int line;
+#ifndef NDEBUG
+	// VM source location of last error iff err != REXLANG_ERR_SUCCESS:
+	const char *file;
+	int line;
+#endif
 
-		jmp_buf j;
-	} err;
+	uint8_t  ki[224];            // stack items
 };
 
 void rexlang_vm_init(
 	struct rexlang_vm *vm,
-	size_t m_size,
+	uint16_t m_size,
 	uint8_t* m,
-	size_t d_size,
+	uint16_t d_size,
 	uint8_t* d,
-	struct rexlang_stack* k,
 	rexlang_call_f syscall,
 	rexlang_call_f extcall
 );

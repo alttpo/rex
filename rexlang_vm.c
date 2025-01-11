@@ -15,19 +15,11 @@ static void opcode(struct rexlang_vm *vm, u16 x)
 	u8 tc;
 
 	if (x == 0) { // halt
-		vm->err.code = REXLANG_ERR_HALTED;
+		vm->err = REXLANG_ERR_HALTED;
 		return;
 	}
 
-	if ((x & 0xF0) == 0x20) { // 010xxxx shlx
-		a = pop(vm, &ta);
-		push(vm, a << (x & 0x0F), ta);
-		return;
-	} else if ((x & 0xF0) == 0x30) { // 011xxxx shrx
-		a = pop(vm, &ta);
-		push(vm, a >> (x & 0x0F), ta);
-		return;
-	} else if ((x & 0xF8) == 0x40) { // 1000xxx ld-u8-offs
+	if ((x & 0xF8) == 0x40) { // 1000xxx ld-u8-offs
 		a = pop_u16(vm) + (u16)(x & 0x07);
 		push_u8(vm, rddu8(vm, a));
 		return;
@@ -46,6 +38,14 @@ static void opcode(struct rexlang_vm *vm, u16 x)
 		a = pop_u16(vm) + (u16)(x & 0x07);
 		wrdu16(vm, a, b);
 		push_u16(vm, b);
+		return;
+	} else if ((x & 0xF0) == 0x20) { // 010xxxx shlx
+		a = pop(vm, &ta);
+		push(vm, a << (x & 0x0F), ta);
+		return;
+	} else if ((x & 0xF0) == 0x30) { // 011xxxx shrx
+		a = pop(vm, &ta);
+		push(vm, a >> (x & 0x0F), ta);
 		return;
 	} else switch (x) {
 	case 0x01: // nop
@@ -248,21 +248,20 @@ enum rexlang_error rexlang_vm_exec(struct rexlang_vm *vm, uint_fast16_t instruct
 {
 	assert(vm->m);
 	assert(vm->d);
-	assert(vm->k);
 
 	// require an explicit error acknowledgement:
-	if (vm->err.code != REXLANG_ERR_SUCCESS) {
-		return vm->err.code;
+	if (vm->err != REXLANG_ERR_SUCCESS) {
+		return vm->err;
 	}
 
 	// mark longjmp destination for error handling:
-	if (setjmp(vm->err.j)) {
+	if (setjmp(vm->j)) {
 		// we get here only if throw_error() (aka longjmp) is called
 		// return error code; additional details found in vm->err struct:
-		return vm->err.code;
+		return vm->err;
 	}
 
-	while ((vm->err.code == REXLANG_ERR_SUCCESS) && instruction_count--) {
+	while ((vm->err == REXLANG_ERR_SUCCESS) && instruction_count--) {
 		// read instruction:
 		u8 o = rdipu8(vm);
 		if ((o & 0xC0) == 0x80) {
@@ -316,15 +315,17 @@ enum rexlang_error rexlang_vm_exec(struct rexlang_vm *vm, uint_fast16_t instruct
 		}
 	}
 
-	return vm->err.code;
+	return vm->err;
 }
 
 void rexlang_vm_error_ack(struct rexlang_vm *vm)
 {
 	// reset error state:
-	vm->err.code = REXLANG_ERR_SUCCESS;
-	vm->err.file = NULL;
-	vm->err.line = 0;
+	vm->err = REXLANG_ERR_SUCCESS;
+#ifndef NDEBUG
+	vm->file = NULL;
+	vm->line = 0;
+#endif
 }
 
 void rexlang_vm_reset(struct rexlang_vm *vm)
@@ -334,31 +335,28 @@ void rexlang_vm_reset(struct rexlang_vm *vm)
 	vm->sp = 224;
 	// we do not clear program memory nor data memory.
 	// clear stack:
-	memset(vm->k, 0, sizeof(struct rexlang_stack));
+	memset(vm->ki, 0, 224);
 	// clear error status:
 	rexlang_vm_error_ack(vm);
 }
 
 void rexlang_vm_init(
 	struct rexlang_vm *vm,
-	size_t m_size,
+	uint16_t m_size,
 	uint8_t* m,
-	size_t d_size,
+	uint16_t d_size,
 	uint8_t* d,
-	struct rexlang_stack* k,
 	rexlang_call_f syscall,
 	rexlang_call_f extcall
 ) {
 	assert(vm && "vm cannot be NULL");
 	assert(m && "m cannot be NULL");
 	assert(d && "d cannot be NULL");
-	assert(k && "k cannot be NULL");
 
 	vm->m = m;
 	vm->m_size = m_size;
 	vm->d = d;
 	vm->d_size = d_size;
-	vm->k = k;
 
 	vm->syscall = syscall;
 	vm->extcall = extcall;

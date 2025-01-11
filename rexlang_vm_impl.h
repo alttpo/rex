@@ -5,7 +5,6 @@
 #define   likely(x) __builtin_expect((x), 1)
 #define unlikely(x) __builtin_expect((x), 0)
 
-// using uint_fastX_t makes a big code-size difference for ARM thumb
 typedef uint_fast8_t  u8;
 typedef uint_fast16_t u16;
 
@@ -15,18 +14,26 @@ typedef uint_fast16_t u16;
 // OR the two type bits together to find the bigger size (any 1 wins)
 #define tmax(a,b) ((a) | (b))
 
-#define throw_error(vm, e) { \
-	vm->err.file = __FILE__; \
-	vm->err.line = __LINE__; \
-	vm->err.code = e; \
-	longjmp(vm->err.j, vm->err.code); \
+#ifdef NDEBUG
+#  define throw_error(vm, e) { \
+	vm->err = e; \
+	longjmp(vm->j, vm->err); \
 }
+#else
+#  define throw_error(vm, e) { \
+	vm->file = __FILE__; \
+	vm->line = __LINE__; \
+	vm->err = e; \
+	longjmp(vm->j, vm->err); \
+}
+#endif
 
 #ifdef REXLANG_NO_BOUNDS_CHECK
 #  define bounds_check_data(vm, p)
 #else
 #  define bounds_check_data(vm, p) \
-	if (unlikely(p >= vm->d_size)) throw_error(vm, REXLANG_ERR_DATA_ADDRESS_OUT_OF_BOUNDS)
+	if (unlikely(p >= vm->d_size)) \
+		throw_error(vm, REXLANG_ERR_DATA_ADDRESS_OUT_OF_BOUNDS)
 #endif
 
 // read from data
@@ -113,14 +120,12 @@ static inline void push_u8(struct rexlang_vm *vm, u8 v)
 		return;
 	}
 
-	struct rexlang_stack *k = vm->k;
-
 	// write the value into the stack:
 	vm->sp--;
-	wrnu8(k->s, vm->sp, v);
+	wrnu8(vm->ki, vm->sp, v);
 	// update type bits:
-	k->t[k->c >> 5] &= ~(1UL<<(k->c & 31));
-	k->c++;
+	vm->kt[vm->kc >> 5] &= ~(1UL<<(vm->kc & 31));
+	vm->kc++;
 }
 
 static inline void push_u16(struct rexlang_vm *vm, u16 v)
@@ -130,14 +135,12 @@ static inline void push_u16(struct rexlang_vm *vm, u16 v)
 		return;
 	}
 
-	struct rexlang_stack *k = vm->k;
-
 	// write the value into the stack:
 	vm->sp -= 2;
-	wrnu16(k->s, vm->sp, v);
+	wrnu16(vm->ki, vm->sp, v);
 	// update type bits:
-	k->t[k->c >> 5] |= 1UL<<(k->c & 31);
-	k->c++;
+	vm->kt[vm->kc >> 5] |= 1UL<<(vm->kc & 31);
+	vm->kc++;
 }
 
 static inline void push(struct rexlang_vm *vm, u16 v, u8 ty)
@@ -156,17 +159,15 @@ static inline u8 pop_u8(struct rexlang_vm *vm)
 		return 0xFF;
 	}
 
-	struct rexlang_stack *k = vm->k;
-
 	// read type bits:
-	if (unlikely((k->t[k->c >> 5] & (1UL<<(k->c & 31))) != 0)) {
+	if (unlikely((vm->kt[vm->kc >> 5] & (1UL<<(vm->kc & 31))) != 0)) {
 		throw_error(vm, REXLANG_ERR_POP_EXPECTED_U8);
 		return 0xFF;
 	};
-	k->c--;
+	vm->kc--;
 
 	// read the value from the stack and move the sp:
-	return rdau8(k->s, &vm->sp);
+	return rdau8(vm->ki, &vm->sp);
 }
 
 static inline u16 pop_u16(struct rexlang_vm *vm)
@@ -176,17 +177,15 @@ static inline u16 pop_u16(struct rexlang_vm *vm)
 		return 0xFF;
 	}
 
-	struct rexlang_stack *k = vm->k;
-
 	// read type bits:
-	if (unlikely((k->t[k->c >> 5] & (1UL<<(k->c & 31))) == 0)) {
+	if (unlikely((vm->kt[vm->kc >> 5] & (1UL<<(vm->kc & 31))) == 0)) {
 		throw_error(vm, REXLANG_ERR_POP_EXPECTED_U16);
 		return 0xFF;
 	};
-	k->c--;
+	vm->kc--;
 
 	// read the value from the stack and move the sp:
-	return rdau16(k->s, &vm->sp);
+	return rdau16(vm->ki, &vm->sp);
 }
 
 static inline u16 pop(struct rexlang_vm *vm, u8 *type_out)
@@ -196,18 +195,16 @@ static inline u16 pop(struct rexlang_vm *vm, u8 *type_out)
 		return 0xFF;
 	}
 
-	struct rexlang_stack *k = vm->k;
-
 	// read type bits:
-	u8 ty = (k->t[k->c >> 5] & (1UL<<(k->c & 31))) != 0;
-	k->c--;
+	u8 ty = (vm->kt[vm->kc >> 5] & (1UL<<(vm->kc & 31))) != 0;
+	vm->kc--;
 
 	*type_out = ty;
 
 	// read the value from the stack and move the sp:
 	if (ty == TY_U8) {
-		return rdau8(k->s, &vm->sp);
+		return rdau8(vm->ki, &vm->sp);
 	} else {
-		return rdau16(k->s, &vm->sp);
+		return rdau16(vm->ki, &vm->sp);
 	}
 }
