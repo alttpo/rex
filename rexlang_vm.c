@@ -49,7 +49,7 @@ static void op_binary(struct rexlang_vm *vm, u8 op, u16 a, u16 b)
 	}
 }
 
-static void instruction(struct rexlang_vm *vm)
+static void opcode(struct rexlang_vm *vm)
 {
 	u16 a;
 	u16 b;
@@ -205,18 +205,199 @@ static void instruction(struct rexlang_vm *vm)
 		}
 	} else if (o < 0x60) {
 		// imm8
-		// TODO
+		u16 x = rdipu8(vm);
+		switch (o & 0x1F) {
+			case 0x01:
+			case 0x02:
+			case 0x03:
+			case 0x04:
+			case 0x05:
+			case 0x06:
+			case 0x07:
+			case 0x08:
+			case 0x09:
+			case 0x0A:
+			case 0x0B:
+			case 0x0C:
+				a = pop(vm);
+				op_binary(vm, o & 0x1F, a, x);
+				break;
+			case 0x0D: // 01001101_xxxxxxxx ld-u8--imm8
+				push(vm, rddu8(vm, x));
+				break;
+			case 0x0E: // 01001110_xxxxxxxx ld-u16-imm8
+				push(vm, rddu16(vm, x));
+				break;
+			case 0x0F: // 01001111_xxxxxxxx ld-u8--offs-imm8
+				a = pop(vm);
+				push(vm, rddu8(vm, x+a));
+				break;
+			case 0x10: // 01010000_xxxxxxxx ld-u16-offs-imm8
+				a = pop(vm);
+				push(vm, rddu16(vm, x+a));
+				break;
+			case 0x11: // 01010001_xxxxxxxx st-u8--imm8
+				a = pop(vm);
+				wrdu8(vm, x, a);
+				push(vm, a&0xFF);
+				break;
+			case 0x12: // 01010010_xxxxxxxx st-u16-imm8
+				a = pop(vm);
+				wrdu16(vm, x, a);
+				push(vm, a);
+				break;
+			case 0x13: // 01010011_xxxxxxxx st-u8--offs-imm8
+				b = pop(vm);
+				a = pop(vm);
+				wrdu8(vm, x+a, b);
+				push(vm, b&0xFF);
+				break;
+			case 0x14: // 01010100_xxxxxxxx st-u16-offs-imm8
+				b = pop(vm);
+				a = pop(vm);
+				wrdu16(vm, x+a, b);
+				push(vm, b);
+				break;
+			case 0x15: // 01010101_xxxxxxxx call-imm8
+				push(vm, vm->ip);
+				vm->ip = x;
+				break;
+			case 0x16: // 01010110_xxxxxxxx jump-imm8
+				vm->ip = x;
+				break;
+			case 0x17: // 01010111_xxxxxxxx jump-imm8-if
+				a = pop(vm);
+				if (a != 0) {
+					vm->ip = x;
+				}
+				break;
+			case 0x18: // 01011000_xxxxxxxx jump-imm8-if-not
+				a = pop(vm);
+				if (a == 0) {
+					vm->ip = x;
+				}
+				break;
+			case 0x19: // 01011001_xxxxxxxx syscall-imm8
+				if (!vm->syscall) {
+					throw_error(vm, REXLANG_ERR_BAD_SYSCALL);
+				}
+				vm->syscall(vm, x);
+				break;
+			case 0x1A: // 01011010_xxxxxxxx extcall-imm8
+				if (!vm->extcall) {
+					throw_error(vm, REXLANG_ERR_BAD_EXTCALL);
+				}
+				vm->extcall(vm, x);
+				break;
+			case 0x1B: // 01011011_0000xxxx shl-imm4
+				a = pop(vm);
+				push(vm, a << (x & 0x0F));
+				break;
+			case 0x1C: // 01011100_0000xxxx shr-imm4
+				a = pop(vm);
+				push(vm, a >> (x & 0x0F));
+				break;
+			default:
+				throw_error(vm, REXLANG_ERR_BAD_OPCODE);
+		}
 	} else if (o < 0x7C) {
 		// imm16
-		// TODO
+		u16 x = rdipu16(vm);
+		switch (o & 0x1F) {
+			case 0x01:
+			case 0x02:
+			case 0x03:
+			case 0x04:
+			case 0x05:
+			case 0x06:
+			case 0x07:
+			case 0x08:
+			case 0x09:
+			case 0x0A:
+			case 0x0B:
+			case 0x0C:
+				a = pop(vm);
+				op_binary(vm, o & 0x1F, a, x);
+				break;
+			case 0x0D: // 01001101_xxxxxxxx ld-u8--imm8
+				push(vm, rddu8(vm, x));
+				break;
+			case 0x0E: // 01001110_xxxxxxxx ld-u16-imm8
+				push(vm, rddu16(vm, x));
+				break;
+			case 0x0F: // 01001111_xxxxxxxx ld-u8--offs-imm8
+				a = pop(vm);
+				push(vm, rddu8(vm, x+a));
+				break;
+			case 0x10: // 01010000_xxxxxxxx ld-u16-offs-imm8
+				a = pop(vm);
+				push(vm, rddu16(vm, x+a));
+				break;
+			case 0x11: // 01010001_xxxxxxxx st-u8--imm8
+				a = pop(vm);
+				wrdu8(vm, x, a);
+				push(vm, a&0xFF);
+				break;
+			case 0x12: // 01010010_xxxxxxxx st-u16-imm8
+				a = pop(vm);
+				wrdu16(vm, x, a);
+				push(vm, a);
+				break;
+			case 0x13: // 01010011_xxxxxxxx st-u8--offs-imm8
+				b = pop(vm);
+				a = pop(vm);
+				wrdu8(vm, x+a, b);
+				push(vm, b&0xFF);
+				break;
+			case 0x14: // 01010100_xxxxxxxx st-u16-offs-imm8
+				b = pop(vm);
+				a = pop(vm);
+				wrdu16(vm, x+a, b);
+				push(vm, b);
+				break;
+			case 0x15: // 01010101_xxxxxxxx call-imm8
+				push(vm, vm->ip);
+				vm->ip = x;
+				break;
+			case 0x16: // 01010110_xxxxxxxx jump-imm8
+				vm->ip = x;
+				break;
+			case 0x17: // 01010111_xxxxxxxx jump-imm8-if
+				a = pop(vm);
+				if (a != 0) {
+					vm->ip = x;
+				}
+				break;
+			case 0x18: // 01011000_xxxxxxxx jump-imm8-if-not
+				a = pop(vm);
+				if (a == 0) {
+					vm->ip = x;
+				}
+				break;
+			case 0x19: // 01011001_xxxxxxxx syscall-imm8
+				if (!vm->syscall) {
+					throw_error(vm, REXLANG_ERR_BAD_SYSCALL);
+				}
+				vm->syscall(vm, x);
+				break;
+			case 0x1A: // 01011010_xxxxxxxx extcall-imm8
+				if (!vm->extcall) {
+					throw_error(vm, REXLANG_ERR_BAD_EXTCALL);
+				}
+				vm->extcall(vm, x);
+				break;
+			default:
+				throw_error(vm, REXLANG_ERR_BAD_OPCODE);
+		}
 	} else if (o < 0x80) {
 		// extended opcodes with dynamic size 1..4 bytes
-		// TODO
+		vm->ip += (o & 3) + 1;
+		// reserved for future extension.
 	} else if ((o & 0xC0) == 0x80) {
 		// push u8 value:
 		push(vm, o);
 	} else if ((o & 0xC0) == 0xC0) {
-		// push up to 4 mixed values:
+		// push up to 4 values each of varying size:
 		int x = (o & 3) + 1;
 		while (x--) {
 			if (o & 4) {
@@ -228,13 +409,9 @@ static void instruction(struct rexlang_vm *vm)
 			}
 			o >>= 1;
 		}
-	}
-#if 0
-	default:
+	} else {
 		throw_error(vm, REXLANG_ERR_BAD_OPCODE);
-		break;
-#endif
-
+	}
 }
 
 enum rexlang_error rexlang_vm_exec(struct rexlang_vm *vm, uint_fast16_t instruction_count)
@@ -255,8 +432,8 @@ enum rexlang_error rexlang_vm_exec(struct rexlang_vm *vm, uint_fast16_t instruct
 	}
 
 	while ((vm->err == REXLANG_ERR_SUCCESS) && instruction_count--) {
-		// read instruction:
-		instruction(vm);
+		// decode and execute the next opcode:
+		opcode(vm);
 	}
 
 	return vm->err;
