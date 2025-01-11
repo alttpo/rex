@@ -113,7 +113,7 @@ static inline void wrnu16(uint8_t* m, u16 p, u16 v)
 	m[p+1] = v >> 8;
 }
 
-static void typush(struct rexlang_vm *vm, uint32_t c)
+static inline void typush(struct rexlang_vm *vm, uint32_t c)
 {
 	uint32_t cn;
 	vm->kc++;
@@ -124,7 +124,7 @@ static void typush(struct rexlang_vm *vm, uint32_t c)
 	}
 }
 
-static u8 typop(struct rexlang_vm *vm)
+static inline u8 typop(struct rexlang_vm *vm)
 {
 	u8 ret = vm->kt[0] & 1;
 	uint32_t c = 0;
