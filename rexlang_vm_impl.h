@@ -69,7 +69,7 @@ static inline void wrdu16(struct rexlang_vm* vm, u16 p, u16 v)
 // read, advance pointer
 static inline u8 rdau8(uint8_t* m, u16 *p)
 {
-	return m[*p++];
+	return m[(*p)++];
 }
 
 // read, advance pointer
@@ -118,7 +118,7 @@ static inline void push(struct rexlang_vm *vm, u16 v)
 	}
 
 	// write the value into the stack:
-	vm->ki[vm->sp--] = v;
+	vm->ki[--vm->sp] = v;
 }
 
 static inline u16 pop(struct rexlang_vm *vm)
