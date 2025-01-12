@@ -1,5 +1,5 @@
 # Rexlang
-Rexlang is a statically typed, integer-based programming language optimized for embedded applications with tight memory constraints.
+Rexlang is a 16-bit integer-only programming language optimized for embedded applications with tight memory constraints.
 
 Rexlang is designed to allow applications to generate and upload rexlang programs to an embedded system which executes them with very low latency access to critical functions such as memory I/O or interfacing with hardware. The rexlang program running in the embedded system may then write messages back to the host-side application to report data.
 
@@ -31,11 +31,9 @@ An out of bounds memory access will raise an error and the program will be halte
 ## Data Types
 Rexlang uses only `u8` and `u16` types for primitive values.
 
-Pointer types `*T` are only defined for documentation purposes; pointers are simply `u16` memory addresses.
+Pointer types `*T` are defined for documentation purposes; pointers are simply `u16` memory addresses.
 
 ## Stack
-The stack grows downward from higher memory addresses to lower memory addresses.
-
 All values on the stack must be of size `u16`. This keeps the implementation simple and efficient.
 
 ## Binary program format
