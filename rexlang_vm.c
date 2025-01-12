@@ -55,6 +55,8 @@ static void opcode(struct rexlang_vm *vm)
 	u16 b;
 	u16 c;
 
+	bounds_check_prgm(vm, vm->ip);
+
 	u8 o = rdipu8(vm);
 	if (o == 0) { // 00000000 halt
 		vm->err = REXLANG_ERR_HALTED;
@@ -316,16 +318,17 @@ static void opcode(struct rexlang_vm *vm)
 		// reserved for future extension.
 	} else if ((o & 0xC0) == 0x80) {
 		// push u8 value:
-		push(vm, o);
+		push(vm, o & 0x3F);
 	} else if ((o & 0xC0) == 0xC0) {
 		// push up to 4 values each of varying size:
 		int x = (o & 3) + 1;
+		u16 v;
 		while (x--) {
 			if (o & 4) {
-				u16 v = rdipu16(vm);
+				v = rdipu16(vm);
 				push(vm, v);
 			} else {
-				u16 v = rdipu8(vm);
+				v = rdipu8(vm);
 				push(vm, v);
 			}
 			o >>= 1;
