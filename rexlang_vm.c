@@ -74,8 +74,7 @@ static void opcode(struct rexlang_vm *vm)
 // compared with inlined push()/pop() calls, when using arm-none-eabi-gcc v13.3.1
 #define push(v) { \
 	if (unlikely(vm->sp == 0)) { \
-		vm->err = REXLANG_ERR_STACK_FULL; \
-		goto error; \
+		goto error_stack_full; \
 	} \
  \
 	vm->ki[--vm->sp] = v; \
@@ -83,8 +82,7 @@ static void opcode(struct rexlang_vm *vm)
 
 #define pop(v) { \
 	if (unlikely(vm->sp >= REXLANG_STACKSZ)) { \
-		vm->err = REXLANG_ERR_STACK_EMPTY; \
-		goto error; \
+		goto error_stack_empty; \
 	} \
  \
 	v = vm->ki[vm->sp++]; \
@@ -823,7 +821,12 @@ static void opcode(struct rexlang_vm *vm)
 #undef pop
 #undef push
 
-	vm->err = REXLANG_ERR_BAD_OPCODE;
+
+error_stack_empty:
+	vm->err = REXLANG_ERR_STACK_EMPTY;
+	goto error;
+error_stack_full:
+	vm->err = REXLANG_ERR_STACK_FULL;
 
 error:
 	longjmp(vm->j, vm->err);
