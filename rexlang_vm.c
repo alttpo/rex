@@ -91,14 +91,13 @@ static void opcode(struct rexlang_vm *vm)
 }
 
 	u8 o = rdipu8(vm);
-	u8 sz = o & 0xC0;
 	// no immediates; stack-only operations:
 	switch (o) {
 		case 0x00: // halt
 			vm->err = REXLANG_ERR_HALTED;
-			return;
+			break;
 		case 0x01: // nop
-			return;
+			break;
 
 		case 0x02:
 		case 0x03:
@@ -119,84 +118,84 @@ static void opcode(struct rexlang_vm *vm)
 			pop(a);
 			pop(b);
 		impl_binary:
-			op_binary(vm, o, a, b);
-			return;
+			op_binary(vm, o & 0x3F, a, b);
+			break;
 		case 0x12: // ld-u8
 			pop(a);
 		impl_ld_u8:
 			push(rddu8(vm, a));
-			return;
+			break;
 		case 0x13: // ld-u16
 			pop(a);
 		impl_ld_u16:
 			push(rddu16(vm, a));
-			return;
+			break;
 		case 0x14: // ld-u32
 			pop(a);
 		impl_u32:
 			push(rddu32(vm, a));
-			return;
+			break;
 		case 0x15: // ld-u8-offs
 			pop(a);
 			pop(b);
 		impl_ld_u8_offs:
 			push(rddu8(vm, b+a));
-			return;
+			break;
 		case 0x16: // ld-u16-offs
 			pop(a);
 			pop(b);
 		impl_ld_u16_offs:
 			push(rddu16(vm, b+a));
-			return;
+			break;
 		case 0x17: // ld-u32-offs
 			pop(a);
 			pop(b);
 		impl_ld_u32_offs:
 			push(rddu32(vm, b+a));
-			return;
+			break;
 		case 0x18: // ld-s8
 			pop(a);
 		impl_ld_s8:
 			push((s8)rddu8(vm, a));
-			return;
+			break;
 		case 0x19: // ld-s16
 			pop(a);
 		impl_ld_s16:
 			push((s16)rddu16(vm, a));
-			return;
+			break;
 		case 0x1A: // ld-s8-offs
 			pop(a);
 			pop(b);
 		impl_ld_s8_offs:
 			push((s8)rddu8(vm, b+a));
-			return;
+			break;
 		case 0x1B: // ld-s16-offs
 			pop(a);
 			pop(b);
 		impl_ld_s16_offs:
 			push((s16)rddu16(vm, b+a));
-			return;
+			break;
 		case 0x1C: // st-u8
 			pop(a);
 			pop(b);
 		impl_st_u8:
 			wrdu8(vm, a, b);
 			push(b);
-			return;
+			break;
 		case 0x1D: // st-u16
 			pop(a);
 			pop(b);
 		impl_st_u16:
 			wrdu16(vm, a, b);
 			push(b);
-			return;
+			break;
 		case 0x1E: // st-u32
 			pop(a);
 			pop(b);
 		impl_st_u32:
 			wrdu32(vm, a, b);
 			push(b);
-			return;
+			break;
 		case 0x1F: // st-u8-offs
 			pop(a);
 			pop(b);
@@ -204,7 +203,7 @@ static void opcode(struct rexlang_vm *vm)
 		impl_st_u8_offs:
 			wrdu8(vm, b+a, c);
 			push(c);
-			return;
+			break;
 		case 0x20: // st-u16-offs
 			pop(a);
 			pop(b);
@@ -212,7 +211,7 @@ static void opcode(struct rexlang_vm *vm)
 		impl_st_u16_offs:
 			wrdu16(vm, b+a, c);
 			push(c);
-			return;
+			break;
 		case 0x21: // st-u32-offs
 			pop(a);
 			pop(b);
@@ -220,57 +219,57 @@ static void opcode(struct rexlang_vm *vm)
 		impl_st_u32_offs:
 			wrdu32(vm, b+a, c);
 			push(c);
-			return;
+			break;
 		case 0x22: // st-u8--discard
 			pop(a);
 			pop(b);
 		impl_st_u8_discard:
 			wrdu8(vm, a, b);
-			return;
+			break;
 		case 0x23: // st-u16-discard
 			pop(a);
 			pop(b);
 		impl_st_u16_discard:
 			wrdu16(vm, a, b);
-			return;
+			break;
 		case 0x24: // st-u32-discard
 			pop(a);
 			pop(b);
 		impl_st_u32_discard:
 			wrdu32(vm, a, b);
-			return;
+			break;
 		case 0x25: // st-u8-offs-discard
 			pop(a);
 			pop(b);
 			pop(c);
 		impl_st_u8_offs_discard:
 			wrdu8(vm, b+a, c);
-			return;
+			break;
 		case 0x26: // st-u16-offs-discard
 			pop(a);
 			pop(b);
 			pop(c);
 		impl_st_u16_offs_discard:
 			wrdu16(vm, b+a, c);
-			return;
+			break;
 		case 0x27: // st-u32-offs-discard
 			pop(a);
 			pop(b);
 			pop(c);
 		impl_st_u32_offs_discard:
 			wrdu32(vm, b+a, c);
-			return;
+			break;
 		case 0x28: // call
 			pop(a);
 		impl_call:
 			push(vm->ip);
 			vm->ip = a;
-			return;
+			break;
 		case 0x29: // return / jump-abs
 			pop(a);
 		impl_jump_abs:
 			vm->ip = a;
-			return;
+			break;
 		case 0x2A: // jump-abs-if
 			pop(a);
 			pop(b);
@@ -278,7 +277,7 @@ static void opcode(struct rexlang_vm *vm)
 			if (b != 0) {
 				vm->ip = a;
 			}
-			return;
+			break;
 		case 0x2B: // jump-abs-if-not
 			pop(a);
 			pop(b);
@@ -286,13 +285,13 @@ static void opcode(struct rexlang_vm *vm)
 			if (b == 0) {
 				vm->ip = a;
 			}
-			return;
+			break;
 		case 0x2C: // jump-rel
 			pop(sa);
 		impl_jump_rel:
 			push(vm->ip);
 			vm->ip += sa;
-			return;
+			break;
 		case 0x2D: // jump-rel-if
 			pop(sa);
 			pop(b);
@@ -300,7 +299,7 @@ static void opcode(struct rexlang_vm *vm)
 			if (b != 0) {
 				vm->ip += sa;
 			}
-			return;
+			break;
 		case 0x2E: // jump-rel-if-not
 			pop(sa);
 			pop(b);
@@ -308,7 +307,7 @@ static void opcode(struct rexlang_vm *vm)
 			if (b == 0) {
 				vm->ip += sa;
 			}
-			return;
+			break;
 		case 0x2F: // syscall
 			pop(a);
 		impl_syscall:
@@ -317,43 +316,43 @@ static void opcode(struct rexlang_vm *vm)
 				goto error;
 			}
 			vm->syscall(vm, a);
-			return;
+			break;
 
 		case 0x30: // shl
 			pop(a);
 			pop(b);
 		impl_shl:
 			push(b << a);
-			return;
+			break;
 		case 0x31: // shr
 			pop(a);
 			pop(b);
 		impl_shr:
 			push(b >> a);
-			return;
+			break;
 
 		case 0x39: // not
 			pop(a);
 			push(!a);
-			return;
+			break;
 		case 0x3A: // neg
 			pop(a);
 			push(-a);
-			return;
+			break;
 		case 0x3B: // discard
 			pop(a);
-			return;
+			break;
 		case 0x3C: // swap
 			pop(a);
 			pop(b);
 			push(a);
 			push(b);
-			return;
+			break;
 		case 0x3D: // dup
 			pop(a);
 			push(a);
 			push(a);
-			return;
+			break;
 		case 0x3E: // dcopy
 			pop(a);
 			pop(b);
@@ -362,7 +361,7 @@ static void opcode(struct rexlang_vm *vm)
 			bounds_check_data(vm, b+a-1);
 			memcpy(vm->d + c, vm->d + b, a);
 			push(c + a);
-			return;
+			break;
 		case 0x3F: // pcopy
 			pop(a);
 			pop(b);
@@ -371,15 +370,15 @@ static void opcode(struct rexlang_vm *vm)
 			bounds_check_prgm(vm, b+a-1);
 			memcpy(vm->d + c, vm->m + b, a);
 			push(c + a);
-			return;
+			break;
 
 		// 0x40..0x7F:
 		case 0x40: // push-u8
 			push(rdipu8(vm));
-			return;
+			break;
 		case 0x41: // push-s8
 			push((s8)rdipu8(vm));
-			return;
+			break;
 		case 0x42:
 		case 0x43:
 		case 0x44:
@@ -520,20 +519,20 @@ static void opcode(struct rexlang_vm *vm)
 			a = rdipu8(vm);
 			pop(b);
 			push(b << a);
-			return;
+			break;
 		case 0x71: // shr
 			a = rdipu8(vm);
 			pop(b);
 			push(b >> a);
-			return;
+			break;
 
 		// 0x80..0xBF:
 		case 0x80: // push-u16
 			push(rdipu16(vm));
-			return;
+			break;
 		case 0x81: // push-s16
 			push((s16)rdipu16(vm));
-			return;
+			break;
 		case 0x82:
 		case 0x83:
 		case 0x84:
@@ -674,10 +673,10 @@ static void opcode(struct rexlang_vm *vm)
 		// 0xC0..0xFF:
 		case 0xC0: // push-u32
 			push(rdipu32(vm));
-			return;
+			break;
 		case 0xC1: // push-s32
 			push((s32)rdipu32(vm));
-			return;
+			break;
 		case 0xC2:
 		case 0xC3:
 		case 0xC4:
@@ -819,6 +818,7 @@ static void opcode(struct rexlang_vm *vm)
 			vm->err = REXLANG_ERR_BAD_OPCODE;
 			goto error;
 	}
+	return;
 
 #undef pop
 #undef push
