@@ -34,7 +34,7 @@ int main(void) {
         0x3F,                           // chip=0x1F        (fxpak)
         0x00, 0x2C,                     // addrlo=0x2C00
         0x00, 0x00,                     // addrhi=0x0000
-        0b01011001, 0x00,               // syscall 0 (chip-set-addr)
+        0b01011100, 0x00,               // syscall 0 (chip-set-addr)
         0,                              // halt
     };
     uint8_t data[256] = {};

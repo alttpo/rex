@@ -44,12 +44,6 @@ struct rexlang_vm {
 
 	void *syscall_ext;
 
-#ifndef NDEBUG
-	// VM source location of last error iff err != REXLANG_ERR_SUCCESS:
-	const char *file;
-	int line;
-#endif
-
 	uint16_t  ki[128];      // stack items
 };
 

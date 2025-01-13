@@ -9,19 +9,10 @@
 typedef uint_fast8_t  u8;
 typedef uint_fast16_t u16;
 
-#ifdef NDEBUG
-#  define throw_error(vm, e) { \
+#define throw_error(vm, e) { \
 	vm->err = e; \
 	longjmp(vm->j, vm->err); \
 }
-#else
-#  define throw_error(vm, e) { \
-	vm->file = __FILE__; \
-	vm->line = __LINE__; \
-	vm->err = e; \
-	longjmp(vm->j, vm->err); \
-}
-#endif
 
 #ifdef REXLANG_NO_BOUNDS_CHECK
 #  define bounds_check_data(vm, p)
