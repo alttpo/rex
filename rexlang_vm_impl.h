@@ -6,8 +6,13 @@
 #define   likely(x) __builtin_expect((x), 1)
 #define unlikely(x) __builtin_expect((x), 0)
 
-typedef uint_fast8_t  u8;
-typedef uint_fast16_t u16;
+typedef uint8_t     u8;
+typedef uint16_t    u16;
+typedef uint32_t    u32;
+typedef int8_t      s8;
+typedef int16_t     s16;
+typedef int32_t     s32;
+typedef unsigned int ui;
 
 #define throw_error(vm, e) { \
 	vm->err = e; \
@@ -26,84 +31,75 @@ typedef uint_fast16_t u16;
 		throw_error(vm, REXLANG_ERR_PRGM_ADDRESS_OUT_OF_BOUNDS)
 #endif
 
-// read from data
-static inline u8 rddu8(struct rexlang_vm* vm, u16 p)
+// read u8 from data
+static inline u8 rddu8(struct rexlang_vm* vm, ui p)
 {
 	bounds_check_data(vm, p);
 	return vm->d[p];
 }
 
-// read from data
-static inline u16 rddu16(struct rexlang_vm* vm, u16 p)
+// read u16 from data
+static inline u16 rddu16(struct rexlang_vm* vm, ui p)
 {
 	bounds_check_data(vm, p);
-	u16 lo = vm->d[p+0];
-	u16 hi = vm->d[p+1];
-	u16 val = ((hi)<<8) | (lo);
-	return val;
+	return *(u16*)(&vm->d[p]);
 }
 
-// write to data
-static inline void wrdu8(struct rexlang_vm* vm, u16 p, u8 v)
+// read u16 from data
+static inline u32 rddu32(struct rexlang_vm* vm, ui p)
+{
+	bounds_check_data(vm, p);
+	return *(u32*)(&vm->d[p]);
+}
+
+// write u8 to data
+static inline void wrdu8(struct rexlang_vm* vm, ui p, u8 v)
 {
 	bounds_check_data(vm, p);
 	vm->d[p] = v;
 }
 
-// write to data
-static inline void wrdu16(struct rexlang_vm* vm, u16 p, u16 v)
+// write u16 to data
+static inline void wrdu16(struct rexlang_vm* vm, ui p, u16 v)
 {
 	bounds_check_data(vm, p);
-	vm->d[p+0] = v;
-	vm->d[p+1] = v >> 8;
+	*(u16*)(&vm->d[p]) = v;
 }
 
-// read, advance pointer
-static inline u8 rdau8(uint8_t* m, u16 *p)
+// write u32 to data
+static inline void wrdu32(struct rexlang_vm* vm, ui p, u32 v)
 {
-	return m[(*p)++];
+	bounds_check_data(vm, p);
+	*(u32*)(&vm->d[p]) = v;
 }
 
-// read, advance pointer
-static inline u16 rdau16(uint8_t* m, u16 *p)
+// read u8 from IP, advance IP
+static inline u8 rdipu8(struct rexlang_vm *vm)
 {
-	assert(m);
-	u16 a = *p;
-	u16 lo = m[a+0];
-	u16 hi = m[a+1];
-	u16 val = ((hi)<<8) | (lo);
-	*p += 2;
+	return vm->m[vm->ip++];
+}
+
+// read u16 from IP, advance IP
+static inline u16 rdipu16(struct rexlang_vm *vm)
+{
+	u16 lo = vm->m[vm->ip++];
+	u16 hi = vm->m[vm->ip++];
+	u16 val = (hi<<8) | (lo);
 	return val;
 }
 
-// read from IP, advance IP
-static inline u8 rdipu8(struct rexlang_vm *vm)
+// read u32 from IP, advance IP
+static inline u32 rdipu32(struct rexlang_vm *vm)
 {
-	return rdau8(vm->m, &vm->ip);
+	u32 b0 = vm->m[vm->ip++];
+	u32 b1 = vm->m[vm->ip++];
+	u32 b2 = vm->m[vm->ip++];
+	u32 b3 = vm->m[vm->ip++];
+	u32 val = (b3<<24) | (b2<<16) | (b1<<8) | (b0);
+	return val;
 }
 
-// read from IP, advance IP
-static inline u16 rdipu16(struct rexlang_vm *vm)
-{
-	return rdau16(vm->m, &vm->ip);
-}
-
-// write, no-advance pointer
-static inline void wrnu8(uint8_t* m, u16 p, u8 v)
-{
-	assert(m);
-	m[p] = v;
-}
-
-// write, no-advance pointer
-static inline void wrnu16(uint8_t* m, u16 p, u16 v)
-{
-	assert(m);
-	m[p+0] = v;
-	m[p+1] = v >> 8;
-}
-
-static inline void push(struct rexlang_vm *vm, u16 v)
+static inline void push(struct rexlang_vm *vm, u32 v)
 {
 	if (unlikely(vm->sp == 0)) {
 		throw_error(vm, REXLANG_ERR_STACK_FULL);
@@ -113,9 +109,9 @@ static inline void push(struct rexlang_vm *vm, u16 v)
 	vm->ki[--vm->sp] = v;
 }
 
-static inline u16 pop(struct rexlang_vm *vm)
+static inline u32 pop(struct rexlang_vm *vm)
 {
-	if (unlikely(vm->sp >= 128)) {
+	if (unlikely(vm->sp >= REXLANG_STACKSZ)) {
 		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
 	}
 
