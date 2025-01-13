@@ -113,11 +113,8 @@ Alpha characters are treated as bits that represent an N-bit unsigned integer or
 | `00111000`                   | **RESERVED**      |      |     |     |         |         |                                                          |
 | `00111001`                   | **RESERVED**      |      |     |     |         |         |                                                          |
 | `00111010`                   | **RESERVED**      |      |     |     |         |         |                                                          |
-| `00111011`                   | **RESERVED**      |      |     |     |         |         |                                                          |
-| `00111100`                   | **RESERVED**      |      |     |     |         |         |                                                          |
-| `00111101`                   | **RESERVED**      |      |     |     |         |         |                                                          |
-| `00111110`                   | **RESERVED**      |      |     |     |         |         |                                                          |
-| `00111111`                   | nop               |      |     |     |         |         | no operation                                             |
+| `00111011`                   | nop               |      |     |     |         |         | no operation                                             |
+| `001111xx` [x+1 bytes]       | opcode-ext        |      |     |     |         |         | extended opcodes                                         |
 | `01000000_xxxxxxxx`          | push-imm8         |      |     |     | x       |         | push x                                                   |
 | `01000001_xxxxxxxx`          | eq--imm8          | a    |     |     | u16     |         | `a == x`                                                 |
 | `01000010_xxxxxxxx`          | ne--imm8          | a    |     |     | u16     |         | `a != x`                                                 |
@@ -150,36 +147,102 @@ Alpha characters are treated as bits that represent an N-bit unsigned integer or
 | `01011101_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
 | `01011110_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
 | `01011111_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
-| `01100000_xxxxxxxx_xxxxxxxx` | push-imm16        |      |     |     | x       |         | push x                                                   |
-| `01100001_xxxxxxxx_xxxxxxxx` | eq--imm16         | a    |     |     | u16     |         | `a == x`                                                 |
-| `01100010_xxxxxxxx_xxxxxxxx` | ne--imm16         | a    |     |     | u16     |         | `a != x`                                                 |
-| `01100011_xxxxxxxx_xxxxxxxx` | le--imm16         | a    |     |     | u16     |         | `a <= x`                                                 |
-| `01100100_xxxxxxxx_xxxxxxxx` | gt--imm16         | a    |     |     | u16     |         | `a >  x`                                                 |
-| `01100101_xxxxxxxx_xxxxxxxx` | lt--imm16         | a    |     |     | u16     |         | `a <  x`                                                 |
-| `01100110_xxxxxxxx_xxxxxxxx` | ge--imm16         | a    |     |     | u16     |         | `a >= x`                                                 |
-| `01100111_xxxxxxxx_xxxxxxxx` | and-imm16         | a    |     |     | u16     |         | `a &  x`                                                 |
-| `01101000_xxxxxxxx_xxxxxxxx` | or--imm16         | a    |     |     | u16     |         | `a \| x`                                                 |
-| `01101001_xxxxxxxx_xxxxxxxx` | xor-imm16         | a    |     |     | u16     |         | `a ^  x`                                                 |
-| `01101010_xxxxxxxx_xxxxxxxx` | add-imm16         | a    |     |     | u16     |         | `a +  x`                                                 |
-| `01101011_xxxxxxxx_xxxxxxxx` | sub-imm16         | a    |     |     | u16     |         | `a -  x`                                                 |
-| `01101100_xxxxxxxx_xxxxxxxx` | mul-imm16         | a    |     |     | u16     |         | `a *  x`                                                 |
-| `01101101_xxxxxxxx_xxxxxxxx` | ld-u8--imm16      |      |     |     | u8      |         | `*( u8*)(&data[x])`                                      |
-| `01101110_xxxxxxxx_xxxxxxxx` | ld-u16-imm16      |      |     |     | u16     |         | `*(u16*)(&data[x])`                                      |
-| `01101111_xxxxxxxx_xxxxxxxx` | ld-u8--offs-imm16 | *u8  |     |     | u8      |         | `*( u8*)(&data[a+x])`                                    |
-| `01110000_xxxxxxxx_xxxxxxxx` | ld-u16-offs-imm16 | *u16 |     |     | u16     |         | `*(u16*)(&data[a+x])`                                    |
-| `01110001_xxxxxxxx_xxxxxxxx` | st-u8--imm16      | u8   |     |     | u8      |         | `*( u8*)(&data[x]) = a`                                  |
-| `01110010_xxxxxxxx_xxxxxxxx` | st-u16-imm16      | u16  |     |     | u16     |         | `*(u16*)(&data[x]) = a`                                  |
-| `01110011_xxxxxxxx_xxxxxxxx` | st-u8--offs-imm16 | *u8  | u8  |     | u8      |         | `*( u8*)(&data[a+x]) = b`                                |
-| `01110100_xxxxxxxx_xxxxxxxx` | st-u16-offs-imm16 | *u16 | u16 |     | u16     |         | `*(u16*)(&data[a+x]) = b`                                |
-| `01110101_xxxxxxxx_xxxxxxxx` | call-imm16        |      |     |     |         |         | push IP; IP=x                                            |
-| `01110110_xxxxxxxx_xxxxxxxx` | jump-imm16        |      |     |     |         |         | IP=x                                                     |
-| `01110111_xxxxxxxx_xxxxxxxx` | jump-imm16-if     | a    |     |     |         |         | IP=x if a != 0                                           |
-| `01111000_xxxxxxxx_xxxxxxxx` | jump-imm16-if-not | a    |     |     |         |         | IP=x if a == 0                                           |
-| `01111001_xxxxxxxx_xxxxxxxx` | syscall-imm16     |      |     |     |         |         | invoke    system function `x`                            |
-| `01111010_xxxxxxxx_xxxxxxxx` | extcall-imm16     |      |     |     |         |         | invoke extension function `x`                            |
-| `01111011_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
-| `011111xx` [x+1 bytes]       | opcode-ext        |      |     |     |         |         | extended opcodes                                         |
-| `10xxxxxx`                   | push-u6           |      |     |     |         |         | push `x` as a u6 value (0..$3F)                                  |
+| `01100000_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01100001_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01100010_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01100011_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01100100_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01100101_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01100110_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01100111_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01101000_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01101001_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01101010_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01101011_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01101100_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01101101_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01101110_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01101111_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01110000_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01110001_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01110010_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01110011_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01110100_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01110101_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01110110_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01110111_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01111000_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01111001_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01111010_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01111011_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01111100_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01111101_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01111110_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01111111_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10000000_xxxxxxxx_xxxxxxxx` | push-imm16        |      |     |     | x       |         | push x                                                   |
+| `10000001_xxxxxxxx_xxxxxxxx` | eq--imm16         | a    |     |     | u16     |         | `a == x`                                                 |
+| `10000010_xxxxxxxx_xxxxxxxx` | ne--imm16         | a    |     |     | u16     |         | `a != x`                                                 |
+| `10000011_xxxxxxxx_xxxxxxxx` | le--imm16         | a    |     |     | u16     |         | `a <= x`                                                 |
+| `10000100_xxxxxxxx_xxxxxxxx` | gt--imm16         | a    |     |     | u16     |         | `a >  x`                                                 |
+| `10000101_xxxxxxxx_xxxxxxxx` | lt--imm16         | a    |     |     | u16     |         | `a <  x`                                                 |
+| `10000110_xxxxxxxx_xxxxxxxx` | ge--imm16         | a    |     |     | u16     |         | `a >= x`                                                 |
+| `10000111_xxxxxxxx_xxxxxxxx` | and-imm16         | a    |     |     | u16     |         | `a &  x`                                                 |
+| `10001000_xxxxxxxx_xxxxxxxx` | or--imm16         | a    |     |     | u16     |         | `a \| x`                                                 |
+| `10001001_xxxxxxxx_xxxxxxxx` | xor-imm16         | a    |     |     | u16     |         | `a ^  x`                                                 |
+| `10001010_xxxxxxxx_xxxxxxxx` | add-imm16         | a    |     |     | u16     |         | `a +  x`                                                 |
+| `10001011_xxxxxxxx_xxxxxxxx` | sub-imm16         | a    |     |     | u16     |         | `a -  x`                                                 |
+| `10001100_xxxxxxxx_xxxxxxxx` | mul-imm16         | a    |     |     | u16     |         | `a *  x`                                                 |
+| `10001101_xxxxxxxx_xxxxxxxx` | ld-u8--imm16      |      |     |     | u8      |         | `*( u8*)(&data[x])`                                      |
+| `10001110_xxxxxxxx_xxxxxxxx` | ld-u16-imm16      |      |     |     | u16     |         | `*(u16*)(&data[x])`                                      |
+| `10001111_xxxxxxxx_xxxxxxxx` | ld-u8--offs-imm16 | *u8  |     |     | u8      |         | `*( u8*)(&data[a+x])`                                    |
+| `10010000_xxxxxxxx_xxxxxxxx` | ld-u16-offs-imm16 | *u16 |     |     | u16     |         | `*(u16*)(&data[a+x])`                                    |
+| `10010001_xxxxxxxx_xxxxxxxx` | st-u8--imm16      | u8   |     |     | u8      |         | `*( u8*)(&data[x]) = a`                                  |
+| `10010010_xxxxxxxx_xxxxxxxx` | st-u16-imm16      | u16  |     |     | u16     |         | `*(u16*)(&data[x]) = a`                                  |
+| `10010011_xxxxxxxx_xxxxxxxx` | st-u8--offs-imm16 | *u8  | u8  |     | u8      |         | `*( u8*)(&data[a+x]) = b`                                |
+| `10010100_xxxxxxxx_xxxxxxxx` | st-u16-offs-imm16 | *u16 | u16 |     | u16     |         | `*(u16*)(&data[a+x]) = b`                                |
+| `10010101_xxxxxxxx_xxxxxxxx` | call-imm16        |      |     |     |         |         | push IP; IP=x                                            |
+| `10010110_xxxxxxxx_xxxxxxxx` | jump-imm16        |      |     |     |         |         | IP=x                                                     |
+| `10010111_xxxxxxxx_xxxxxxxx` | jump-imm16-if     | a    |     |     |         |         | IP=x if a != 0                                           |
+| `10011000_xxxxxxxx_xxxxxxxx` | jump-imm16-if-not | a    |     |     |         |         | IP=x if a == 0                                           |
+| `10011001_xxxxxxxx_xxxxxxxx` | syscall-imm16     |      |     |     |         |         | invoke    system function `x`                            |
+| `10011010_xxxxxxxx_xxxxxxxx` | extcall-imm16     |      |     |     |         |         | invoke extension function `x`                            |
+| `10011011_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10011100_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10011101_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10011110_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10011111_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10100000_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10100001_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10100010_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10100011_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10100100_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10100101_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10100110_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10100111_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10101000_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10101001_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10101010_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10101011_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10101100_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10101101_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10101110_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10101111_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10110000_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10110001_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10110010_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10110011_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10110100_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10110101_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10110110_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10110111_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10111000_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10111001_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10111010_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10111011_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10111100_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10111101_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10111110_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `10111111_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
 | `11dcbaxx` [x+1 values]      | push-values       |      |     |     |         |         | push `x+1` (1..$4) values of sizes (`a`..`d`=`u8`/`u16`) |
 
 ### Value formats

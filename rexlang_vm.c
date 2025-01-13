@@ -61,13 +61,26 @@ static void opcode(struct rexlang_vm *vm)
 	if (o == 0) { // 00000000 halt
 		vm->err = REXLANG_ERR_HALTED;
 		return;
-	} else if (o < 0x40) {
+	}
+	if ((o & 0xC0) == 0x00) {
 		// no immediates; stack-only operations:
-		if (o >= 0x01 && o <= 0x0C) {
-			b = pop(vm);
-			a = pop(vm);
-			op_binary(vm, o, a, b);
-		} else switch (o) {
+		switch (o) {
+			case 0x01:
+			case 0x02:
+			case 0x03:
+			case 0x04:
+			case 0x05:
+			case 0x06:
+			case 0x07:
+			case 0x08:
+			case 0x09:
+			case 0x0A:
+			case 0x0B:
+			case 0x0C:
+				b = pop(vm);
+				a = pop(vm);
+				op_binary(vm, o, a, b);
+				break;
 			case 0x0D: // 00001101 ld-u8
 				a = pop(vm);
 				push(vm, rddu8(vm, a));
@@ -200,21 +213,28 @@ static void opcode(struct rexlang_vm *vm)
 				memcpy(vm->d + a, vm->m + b, c);
 				push(vm, a + c);
 				break;
-			case 0x3F: // 00111111 nop
+			case 0x3B: // 00111011 nop
+				break;
+			case 0x3F:
+				// 3C..3F: extended opcodes with dynamic size 1..4 bytes
+				vm->ip += (o & 3) + 1;
+				// reserved for future extension.
 				break;
 			default:
 				throw_error(vm, REXLANG_ERR_BAD_OPCODE);
 		}
-	} else if (o < 0x7C) {
+		return;
+	}
+	if ((o & 0xC0) < 0xC0) {
 		u16 x;
-		if (o < 0x60) {
+		if (o < 0x80) {
 			// imm8
 			x = rdipu8(vm);
 		} else {
 			// imm16
 			x = rdipu16(vm);
 		}
-		switch (o & 0x1F) {
+		switch (o & 0x3F) {
 			case 0x00:
 				// push-imm8 / push-imm16:
 				push(vm, x);
@@ -302,13 +322,13 @@ static void opcode(struct rexlang_vm *vm)
 				vm->extcall(vm, x);
 				break;
 			case 0x1B: // 01011011_0000xxxx shl-imm4
-				if (o < 0x60) {
+				if (o < 0x80) {
 					a = pop(vm);
 					push(vm, a << (x & 0x0F));
 					break;
 				} // else fallthrough;
 			case 0x1C: // 01011100_0000xxxx shr-imm4
-				if (o < 0x60) {
+				if (o < 0x80) {
 					a = pop(vm);
 					push(vm, a >> (x & 0x0F));
 					break;
@@ -316,14 +336,9 @@ static void opcode(struct rexlang_vm *vm)
 			default:
 				throw_error(vm, REXLANG_ERR_BAD_OPCODE);
 		}
-	} else if (o < 0x80) {
-		// 7C..7F: extended opcodes with dynamic size 1..4 bytes
-		vm->ip += (o & 3) + 1;
-		// reserved for future extension.
-	} else if ((o & 0xC0) == 0x80) {
-		// push u8 value:
-		push(vm, o & 0x3F);
-	} else if ((o & 0xC0) == 0xC0) {
+		return;
+	}
+	if ((o & 0xC0) == 0xC0) {
 		// push up to 4 values each of varying size:
 		int x = (o & 3) + 1;
 		u16 v;
@@ -337,9 +352,10 @@ static void opcode(struct rexlang_vm *vm)
 			}
 			o >>= 1;
 		}
-	} else {
-		throw_error(vm, REXLANG_ERR_BAD_OPCODE);
+		return;
 	}
+
+	throw_error(vm, REXLANG_ERR_BAD_OPCODE);
 }
 
 enum rexlang_error rexlang_vm_exec(struct rexlang_vm *vm, uint_fast16_t instruction_count)

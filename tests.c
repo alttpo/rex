@@ -30,9 +30,10 @@ int main(void) {
     enum rexlang_error err;
     struct rexlang_vm vm;
     uint8_t prgm[256] = {
-        0b10111111,                     // push 0x1F   (chip=fxpak)
-        0b01100000, 0x00, 0x2C,         // push 0x2C00 (addrlo)
-        0b10000000,                     // push 0x0000 (addrhi)
+        0b11011010,                     // push 3 values: u8, u16, u16
+        0x3F,                           // chip=0x1F        (fxpak)
+        0x00, 0x2C,                     // addrlo=0x2C00
+        0x00, 0x00,                     // addrhi=0x0000
         0b01011001, 0x00,               // syscall 0 (chip-set-addr)
         0,                              // halt
     };
@@ -42,6 +43,12 @@ int main(void) {
 
     err = rexlang_vm_exec(&vm, 256);
     printf("err: %d\n", err);
+    if (err != REXLANG_ERR_HALTED) {
+        return 1;
+    }
+    if (chip_addr[0x3F] != 0x2C00) {
+        return 2;
+    }
 
     return 0;
 }
