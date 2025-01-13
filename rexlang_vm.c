@@ -215,6 +215,10 @@ static void opcode(struct rexlang_vm *vm)
 			x = rdipu16(vm);
 		}
 		switch (o & 0x1F) {
+			case 0x00:
+				// push-imm8 / push-imm16:
+				push(vm, x);
+				break;
 			case 0x01:
 			case 0x02:
 			case 0x03:

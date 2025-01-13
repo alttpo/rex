@@ -118,7 +118,7 @@ Alpha characters are treated as bits that represent an N-bit unsigned integer or
 | `00111101`                   | **RESERVED**      |      |     |     |         |         |                                                          |
 | `00111110`                   | **RESERVED**      |      |     |     |         |         |                                                          |
 | `00111111`                   | nop               |      |     |     |         |         | no operation                                             |
-| `01000000_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01000000_xxxxxxxx`          | push-imm8         |      |     |     | x       |         | push x                                                   |
 | `01000001_xxxxxxxx`          | eq--imm8          | a    |     |     | u16     |         | `a == x`                                                 |
 | `01000010_xxxxxxxx`          | ne--imm8          | a    |     |     | u16     |         | `a != x`                                                 |
 | `01000011_xxxxxxxx`          | le--imm8          | a    |     |     | u16     |         | `a <= x`                                                 |
@@ -150,7 +150,7 @@ Alpha characters are treated as bits that represent an N-bit unsigned integer or
 | `01011101_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
 | `01011110_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
 | `01011111_xxxxxxxx`          | **RESERVED**      |      |     |     |         |         |                                                          |
-| `01100000_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
+| `01100000_xxxxxxxx_xxxxxxxx` | push-imm16        |      |     |     | x       |         | push x                                                   |
 | `01100001_xxxxxxxx_xxxxxxxx` | eq--imm16         | a    |     |     | u16     |         | `a == x`                                                 |
 | `01100010_xxxxxxxx_xxxxxxxx` | ne--imm16         | a    |     |     | u16     |         | `a != x`                                                 |
 | `01100011_xxxxxxxx_xxxxxxxx` | le--imm16         | a    |     |     | u16     |         | `a <= x`                                                 |
@@ -179,7 +179,7 @@ Alpha characters are treated as bits that represent an N-bit unsigned integer or
 | `01111010_xxxxxxxx_xxxxxxxx` | extcall-imm16     |      |     |     |         |         | invoke extension function `x`                            |
 | `01111011_xxxxxxxx_xxxxxxxx` | **RESERVED**      |      |     |     |         |         |                                                          |
 | `011111xx` [x+1 bytes]       | opcode-ext        |      |     |     |         |         | extended opcodes                                         |
-| `10xxxxxx`                   | push-u8           |      |     |     |         |         | push `x` (0..$3F) value                                  |
+| `10xxxxxx`                   | push-u6           |      |     |     |         |         | push `x` as a u6 value (0..$3F)                                  |
 | `11dcbaxx` [x+1 values]      | push-values       |      |     |     |         |         | push `x+1` (1..$4) values of sizes (`a`..`d`=`u8`/`u16`) |
 
 ### Value formats

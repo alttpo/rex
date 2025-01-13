@@ -13,12 +13,13 @@ enum rexlang_error {
 	REXLANG_ERR_SUCCESS = 0,
 	REXLANG_ERR_HALTED,
 	REXLANG_ERR_BAD_OPCODE,
-	REXLANG_ERR_BAD_SYSCALL,
-	REXLANG_ERR_BAD_EXTCALL,
 	REXLANG_ERR_STACK_EMPTY,
 	REXLANG_ERR_STACK_FULL,
 	REXLANG_ERR_DATA_ADDRESS_OUT_OF_BOUNDS,
 	REXLANG_ERR_PRGM_ADDRESS_OUT_OF_BOUNDS,
+	REXLANG_ERR_BAD_SYSCALL,
+	REXLANG_ERR_BAD_EXTCALL,
+	REXLANG_ERR_CALL_ARG_OUT_OF_RANGE,
 };
 
 typedef uint_fast16_t rexlang_ip;
@@ -40,6 +41,8 @@ struct rexlang_vm {
 
 	rexlang_call_f syscall;
 	rexlang_call_f extcall;
+
+	void *syscall_ext;
 
 #ifndef NDEBUG
 	// VM source location of last error iff err != REXLANG_ERR_SUCCESS:
