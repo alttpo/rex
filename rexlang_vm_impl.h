@@ -79,6 +79,19 @@ static inline u8 rdipu8(struct rexlang_vm *vm)
 	return vm->m[vm->ip++];
 }
 
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+// read u16 from IP, advance IP
+static inline u16 rdipu16(struct rexlang_vm *vm)
+{
+	return *(u16*)(&vm->m[vm->ip += sizeof(u16)]);
+}
+
+// read u32 from IP, advance IP
+static inline u32 rdipu32(struct rexlang_vm *vm)
+{
+	return *(u32*)(&vm->m[vm->ip += sizeof(u32)]);
+}
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 // read u16 from IP, advance IP
 static inline u16 rdipu16(struct rexlang_vm *vm)
 {
@@ -98,6 +111,11 @@ static inline u32 rdipu32(struct rexlang_vm *vm)
 	u32 val = (b3<<24) | (b2<<16) | (b1<<8) | (b0);
 	return val;
 }
+#else
+#  define VALUE_TO_STRING(x) #x
+#  define VALUE(x) VALUE_TO_STRING(x)
+#  pragma error("unknown __BYTE_ORDER__: " VALUE(__BYTE_ORDER__))
+#endif
 
 static inline void push(struct rexlang_vm *vm, u32 v)
 {

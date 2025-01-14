@@ -454,7 +454,6 @@ static void opcode(struct rexlang_vm *vm)
 			push((s8)rdipu8(vm));
 			break;
 
-
 		case 0x42: // eq
 			a = rdipu8(vm);
 			pop(b);
