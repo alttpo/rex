@@ -328,24 +328,24 @@ The type names used are:
 | `11111111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
 
 ## Standard Function Library
-|   Code | Name          | Arg1 | Arg2   | Arg3   | Result    | Description                                 |
-| -----: | :------------ | ---- | ------ | ------ | --------- | ------------------------------------------- |
-| `0000` | chip-set-addr | chip | addrlo | addrhi |           | set chip address (32-bit)                   |
-| `0001` | chip-rdn-u8   | chip |        |        | u8        | read `u8`, do not advance chip address      |
-| `0002` | chip-wrn-u8   | chip | u8     |        |           | write `u8`, do not advance chip address     |
-| `0003` | chip-rda-u8   | chip |        |        | u8        | read `u8`, auto-advance chip address by 1   |
-| `0004` | chip-rda-u16  | chip |        |        | u16       | read `u16`, auto-advance chip address by 2  |
-| `0005` | chip-wra-u8   | chip | u8     |        |           | write `u8`, auto-advance chip address by 1  |
-| `0006` | chip-wra-u16  | chip | u16    |        |           | write `u16`, auto-advance chip address by 2 |
-| `0007` | chip-rda-blk  | chip | len    | *dest  | *dest+len | read block of `len` bytes into `dest`       |
-| `0008` | chip-wra-blk  | chip | len    | *src   |           | write block of `len` bytes from `src`       |
-| `0009` |               |      |        |        |           |                                             |
-| `000A` |               |      |        |        |           |                                             |
-| `000B` |               |      |        |        |           |                                             |
-| `000C` |               |      |        |        |           |                                             |
-| `000D` |               |      |        |        |           |                                             |
-| `000E` |               |      |        |        |           |                                             |
-| `000F` |               |      |        |        |           |                                             |
+|   Code | Name          | Arg1 | Arg2 | Arg3  | Result    | Description                                 |
+| -----: | :------------ | ---- | ---- | ----- | --------- | ------------------------------------------- |
+| `0000` | chip-set-addr | chip | addr |       |           | set chip address (32-bit)                   |
+| `0001` | chip-rdn-u8   | chip |      |       | u8        | read `u8`, do not advance chip address      |
+| `0002` | chip-wrn-u8   | chip | u8   |       |           | write `u8`, do not advance chip address     |
+| `0003` | chip-rda-u8   | chip |      |       | u8        | read `u8`, auto-advance chip address by 1   |
+| `0004` | chip-rda-u16  | chip |      |       | u16       | read `u16`, auto-advance chip address by 2  |
+| `0005` | chip-wra-u8   | chip | u8   |       |           | write `u8`, auto-advance chip address by 1  |
+| `0006` | chip-wra-u16  | chip | u16  |       |           | write `u16`, auto-advance chip address by 2 |
+| `0007` | chip-rda-blk  | chip | len  | *dest | *dest+len | read block of `len` bytes into `dest`       |
+| `0008` | chip-wra-blk  | chip | len  | *src  |           | write block of `len` bytes from `src`       |
+| `0009` |               |      |      |       |           |                                             |
+| `000A` |               |      |      |       |           |                                             |
+| `000B` |               |      |      |       |           |                                             |
+| `000C` |               |      |      |       |           |                                             |
+| `000D` |               |      |      |       |           |                                             |
+| `000E` |               |      |      |       |           |                                             |
+| `000F` |               |      |      |       |           |                                             |
 
 TODO: input/output via USB
 considered raw stdin/stdout treatment but that's too unstructured to allow for multiplexing
