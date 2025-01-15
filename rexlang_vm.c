@@ -11,6 +11,7 @@ static void opcode(struct rexlang_vm *vm)
 	u32 b;
 	u32 c;
 	s32 sa;
+	s32 sb;
 
 	bounds_check_prgm(vm, vm->ip);
 
@@ -61,9 +62,9 @@ static void opcode(struct rexlang_vm *vm)
 			break;
 		case 0x05: // le-si
 			pop(sa);
-			pop(b);
+			pop(sb);
 		impl_le_si:
-			push((s32)b <= sa);
+			push(sb <= sa);
 			break;
 		case 0x06: // gt-ui
 			pop(a);
@@ -73,9 +74,9 @@ static void opcode(struct rexlang_vm *vm)
 			break;
 		case 0x07: // gt-si
 			pop(sa);
-			pop(b);
+			pop(sb);
 		impl_gt_si:
-			push((s32)b > sa);
+			push(sb > sa);
 			break;
 		case 0x08: // lt-ui
 			pop(a);
@@ -85,9 +86,9 @@ static void opcode(struct rexlang_vm *vm)
 			break;
 		case 0x09: // lt-si
 			pop(sa);
-			pop(b);
+			pop(sb);
 		impl_lt_si:
-			push((s32)b < sa);
+			push(sb < sa);
 			break;
 		case 0x0A: // ge-ui
 			pop(a);
@@ -97,9 +98,9 @@ static void opcode(struct rexlang_vm *vm)
 			break;
 		case 0x0B: // ge-si
 			pop(sa);
-			pop(b);
+			pop(sb);
 		impl_ge_si:
-			push((s32)b >= sa);
+			push(sb >= sa);
 			break;
 		case 0x0C: // and
 			pop(a);
@@ -412,7 +413,7 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_le_ui;
 		case 0x45: // le-si
 			sa = (s8)rdipu8(vm);
-			pop(b);
+			pop(sb);
 			goto impl_le_si;
 		case 0x46: // gt-ui
 			a = rdipu8(vm);
@@ -420,7 +421,7 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_gt_ui;
 		case 0x47: // gt-si
 			sa = (s8)rdipu8(vm);
-			pop(b);
+			pop(sb);
 			goto impl_gt_si;
 		case 0x48: // lt-ui
 			a = rdipu8(vm);
@@ -428,7 +429,7 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_lt_ui;
 		case 0x49: // lt-si
 			sa = (s8)rdipu8(vm);
-			pop(b);
+			pop(sb);
 			goto impl_lt_si;
 		case 0x4A: // ge-ui
 			a = rdipu8(vm);
@@ -436,7 +437,7 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_ge_ui;
 		case 0x4B: // ge-si
 			sa = (s8)rdipu8(vm);
-			pop(b);
+			pop(sb);
 			goto impl_ge_si;
 		case 0x4C: // and
 			a = rdipu8(vm);
@@ -613,7 +614,7 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_le_ui;
 		case 0x85: // le-si
 			sa = (s16)rdipu16(vm);
-			pop(b);
+			pop(sb);
 			goto impl_le_si;
 		case 0x86: // gt-ui
 			a = rdipu16(vm);
@@ -621,7 +622,7 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_gt_ui;
 		case 0x87: // gt-si
 			sa = (s16)rdipu16(vm);
-			pop(b);
+			pop(sb);
 			goto impl_gt_si;
 		case 0x88: // lt-ui
 			a = rdipu16(vm);
@@ -629,7 +630,7 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_lt_ui;
 		case 0x89: // lt-si
 			sa = (s16)rdipu16(vm);
-			pop(b);
+			pop(sb);
 			goto impl_lt_si;
 		case 0x8A: // ge-ui
 			a = rdipu16(vm);
@@ -637,7 +638,7 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_ge_ui;
 		case 0x8B: // ge-si
 			sa = (s16)rdipu16(vm);
-			pop(b);
+			pop(sb);
 			goto impl_ge_si;
 		case 0x8C: // and
 			a = rdipu16(vm);
@@ -804,7 +805,7 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_le_ui;
 		case 0xC5: // le-si
 			sa = (s32)rdipu32(vm);
-			pop(b);
+			pop(sb);
 			goto impl_le_si;
 		case 0xC6: // gt-ui
 			a = rdipu32(vm);
@@ -812,7 +813,7 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_gt_ui;
 		case 0xC7: // gt-si
 			sa = (s32)rdipu32(vm);
-			pop(b);
+			pop(sb);
 			goto impl_gt_si;
 		case 0xC8: // lt-ui
 			a = rdipu32(vm);
@@ -820,7 +821,7 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_lt_ui;
 		case 0xC9: // lt-si
 			sa = (s32)rdipu32(vm);
-			pop(b);
+			pop(sb);
 			goto impl_lt_si;
 		case 0xCA: // ge-ui
 			a = rdipu32(vm);
@@ -828,7 +829,7 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_ge_ui;
 		case 0xCB: // ge-si
 			sa = (s32)rdipu32(vm);
-			pop(b);
+			pop(sb);
 			goto impl_ge_si;
 		case 0xCC: // and
 			a = rdipu32(vm);
