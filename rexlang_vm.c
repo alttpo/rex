@@ -5,62 +5,6 @@
 #include <setjmp.h>
 #include "rexlang_vm_impl.h"
 
-static void op_binary(struct rexlang_vm *vm, u8 op, u32 a, u32 b)
-{
-	switch (op) {
-		case 0x02: // eq
-			push(vm, b == a);
-			break;
-		case 0x03: // ne
-			push(vm, b != a);
-			break;
-		case 0x04: // le-ui
-			push(vm, b <= a);
-			break;
-		case 0x05: // le-si
-			push(vm, (s32)b <= (s32)a);
-			break;
-		case 0x06: // gt-ui
-			push(vm, b > a);
-			break;
-		case 0x07: // gt-si
-			push(vm, (s32)b > (s32)a);
-			break;
-		case 0x08: // lt-ui
-			push(vm, b < a);
-			break;
-		case 0x09: // lt-si
-			push(vm, (s32)b < (s32)a);
-			break;
-		case 0x0A: // ge-ui
-			push(vm, b >= a);
-			break;
-		case 0x0B: // ge-si
-			push(vm, (s32)b >= (s32)a);
-			break;
-		case 0x0C: // and
-			push(vm, b & a);
-			break;
-		case 0x0D: // or
-			push(vm, b | a);
-			break;
-		case 0x0E: // xor
-			push(vm, b ^ a);
-			break;
-		case 0x0F: // add
-			push(vm, b + a);
-			break;
-		case 0x10: // sub
-			push(vm, b - a);
-			break;
-		case 0x11: // mul
-			push(vm, b * a);
-			break;
-		default:
-			assert("bad developer!");
-	}
-}
-
 static void opcode(struct rexlang_vm *vm)
 {
 	u32 a;

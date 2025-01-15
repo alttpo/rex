@@ -40,6 +40,7 @@ int main(void) {
 
     err = rexlang_vm_exec(&vm, 256);
     printf("err: %d\n", err);
+
     if (err != REXLANG_ERR_HALTED) {
         return 1;
     }
