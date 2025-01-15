@@ -1039,7 +1039,7 @@ void rexlang_vm_reset(struct rexlang_vm *vm)
 void rexlang_vm_init(
 	struct rexlang_vm *vm,
 	uint32_t m_size,
-	uint8_t* m,
+	const uint8_t* m,
 	uint32_t d_size,
 	uint8_t* d,
 	rexlang_call_f syscall

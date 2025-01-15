@@ -31,7 +31,7 @@ struct rexlang_vm {
 	rexlang_sp sp;          // stack pointer to free position
 	enum rexlang_error err; // enum rexlang_error
 
-	uint8_t* m;             // program memory
+	const uint8_t* m;             // program memory
 	uint8_t* d;             // data memory
 
 	uint32_t m_size;
@@ -48,7 +48,7 @@ struct rexlang_vm {
 void rexlang_vm_init(
 	struct rexlang_vm *vm,
 	uint32_t m_size,
-	uint8_t* m,
+	const uint8_t* m,
 	uint32_t d_size,
 	uint8_t* d,
 	rexlang_call_f syscall

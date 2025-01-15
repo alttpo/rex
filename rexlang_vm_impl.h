@@ -1,5 +1,4 @@
 
-#include <assert.h>
 #include <stdint.h>
 #include "rexlang_vm.h"
 
@@ -83,13 +82,17 @@ static inline u8 rdipu8(struct rexlang_vm *vm)
 // read u16 from IP, advance IP
 static inline u16 rdipu16(struct rexlang_vm *vm)
 {
-	return *(u16*)(&vm->m[vm->ip += sizeof(u16)]);
+	rexlang_ip ip = vm->ip;
+	vm->ip += sizeof(u16);
+	return *(u16*)(&vm->m[ip]);
 }
 
 // read u32 from IP, advance IP
 static inline u32 rdipu32(struct rexlang_vm *vm)
 {
-	return *(u32*)(&vm->m[vm->ip += sizeof(u32)]);
+	rexlang_ip ip = vm->ip;
+	vm->ip += sizeof(u32);
+	return *(u32*)(&vm->m[ip]);
 }
 #elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 // read u16 from IP, advance IP

@@ -25,27 +25,73 @@ void syscall(struct rexlang_vm* vm, uint32_t fn) {
     }
 }
 
-int main(void) {
-    enum rexlang_error err;
-    struct rexlang_vm vm;
-    uint8_t prgm[256] = {
-        0b01000000, 0x3F,                   // push-u8    chip=0x3F        (fxpak)
-        0b11000000, 0x00, 0x2C, 0x00, 0x00, // push-u32   addr=0x00002C00
-        0b01101111, 0x00,                   // syscall-u8 0 (chip-set-addr)
-        0,                                  // halt
-    };
-    uint8_t data[256] = {};
+struct test_t {
+    const char *name;   // name of test
+    uint8_t prgm[64];   // test rexlang program
 
-    rexlang_vm_init(&vm, 256, prgm, 256, data, syscall);
+    enum rexlang_error check_error;
+    int         check_stack_count;      // number of stack items to check
+    uint32_t    check_stack_values[4];  // values of stack items to check
 
-    err = rexlang_vm_exec(&vm, 256);
-    printf("err: %d\n", err);
+    int (*check_fn)(struct rexlang_vm *vm);
+};
 
-    if (err != REXLANG_ERR_HALTED) {
-        return 1;
-    }
+int test_chip_set_addr(struct rexlang_vm *vm) {
     if (chip_addr[0x3F] != 0x2C00) {
         return 2;
+    }
+
+    return 0;
+}
+
+const struct test_t tests[] = {
+    {
+        "chip-set-addr",
+        {
+            0b01000000, 0x3F,                   // push-u8    chip=0x3F        (fxpak)
+            0b11000000, 0x00, 0x2C, 0x00, 0x00, // push-u32   addr=0x00002C00
+            0b01101111, 0x00,                   // syscall-u8 0 (chip-set-addr)
+            0,                                  // halt
+        },
+        REXLANG_ERR_HALTED,
+        0,
+        {
+            0,
+        },
+        test_chip_set_addr,
+    },
+};
+
+int exec_test(const struct test_t *t) {
+    enum rexlang_error err;
+    struct rexlang_vm vm;
+    uint8_t data[256] = {0};
+
+    rexlang_vm_init(&vm, 64, t->prgm, 256, data, syscall);
+    err = rexlang_vm_exec(&vm, 1024);
+
+    if (err != t->check_error) {
+        return 1;
+    }
+
+    if (t->check_fn) {
+        int ret = t->check_fn(&vm);
+        if (ret) {
+            return ret;
+        }
+    }
+
+    return 0;
+}
+
+int main(void) {
+    for (int i = 0; i < sizeof(tests)/sizeof(struct test_t); i++) {
+        printf("executing test: %s\n", tests[i].name);
+        int ret = exec_test(&tests[i]);
+        if (ret) {
+            printf("** test FAILED! ret=%d\n", ret);
+            return 1;
+        }
     }
 
     return 0;
