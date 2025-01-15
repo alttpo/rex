@@ -60,7 +60,7 @@ const struct test_t tests[] = {
         "halt",
         {
             0,                  // halt
-            0b01000000, 0x3F    // push-u8 0x3F
+            0b01000000, 0x3F    // push-u8
         },
         REXLANG_ERR_HALTED,
         1,
@@ -98,8 +98,8 @@ const struct test_t tests[] = {
     {
         "eq err2",
         {
-            0b01000000, 0,      // push-u8 0
-            2,                  // eq
+            0b01000000, 0,      // push-u8
+            0x02,               // eq
             0,                  // halt
         },
         REXLANG_ERR_STACK_EMPTY,
@@ -112,9 +112,9 @@ const struct test_t tests[] = {
     {
         "eq true",
         {
-            0b01000000, 0,      // push-u8 0
-            0b01000000, 0,      // push-u8 0
-            2,                  // eq
+            0b01000000, 0,      // push-u8
+            0b01000000, 0,      // push-u8
+            0x02,               // eq
             0,                  // halt
         },
         REXLANG_ERR_HALTED,
@@ -127,15 +127,101 @@ const struct test_t tests[] = {
     {
         "eq false",
         {
-            0b01000000, 0,      // push-u8 0
-            0b01000000, 1,      // push-u8 0
-            2,                  // eq
+            0b01000000, 0,      // push-u8
+            0b01000000, 1,      // push-u8
+            0x02,               // eq
             0,                  // halt
         },
         REXLANG_ERR_HALTED,
         1,
         {
             0
+        },
+        NULL,
+    },
+    {
+        "eq-imm8 true",
+        {
+            0b01000000, 0,      // push-u8
+            0x42, 0,            // eq-imm8
+            0,                  // halt
+        },
+        REXLANG_ERR_HALTED,
+        1,
+        {
+            1
+        },
+        NULL,
+    },
+    {
+        "eq-imm8 false",
+        {
+            0b01000000, 0,      // push-u8
+            0x42, 1,            // eq-imm8
+            0,                  // halt
+        },
+        REXLANG_ERR_HALTED,
+        1,
+        {
+            0
+        },
+        NULL,
+    },
+    {
+        "eq-imm16 true",
+        {
+            0b01000000, 0,      // push-u8
+            0x82, 0, 0,         // eq-imm16
+            0,                  // halt
+        },
+        REXLANG_ERR_HALTED,
+        1,
+        {
+            1
+        },
+        NULL,
+    },
+    {
+        "eq-imm16 false",
+        {
+            0b01000000, 0,      // push-u8
+            0x82, 1, 0,         // eq-imm16
+            0,                  // halt
+        },
+        REXLANG_ERR_HALTED,
+        1,
+        {
+            0
+        },
+        NULL,
+    },
+    {
+        "ne false",
+        {
+            0b01000000, 1,      // push-u8
+            0b01000000, 1,      // push-u8
+            0x03,               // ne
+            0,                  // halt
+        },
+        REXLANG_ERR_HALTED,
+        1,
+        {
+            0
+        },
+        NULL,
+    },
+    {
+        "ne true",
+        {
+            0b01000000, 0,      // push-u8
+            0b01000000, 1,      // push-u8
+            0x03,               // ne
+            0,                  // halt
+        },
+        REXLANG_ERR_HALTED,
+        1,
+        {
+            1
         },
         NULL,
     },

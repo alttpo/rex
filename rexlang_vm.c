@@ -996,7 +996,6 @@ error:
 enum rexlang_error rexlang_vm_exec(struct rexlang_vm *vm, unsigned int instruction_count)
 {
 	assert(vm->m);
-	assert(vm->d);
 
 	// require an explicit error acknowledgement:
 	if (vm->err != REXLANG_ERR_SUCCESS) {
