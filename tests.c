@@ -44,7 +44,7 @@ struct test_t {
     uint32_t actual = actual_expr; \
     if (actual != expected) { \
         sprintf((msg_out), " expected %08X, got %08X", expected, actual); \
-        return 2; \
+        return 1; \
     } \
 }
 
@@ -56,6 +56,89 @@ int test_chip_set_addr(struct rexlang_vm* vm, char* msg) {
 }
 
 const struct test_t tests[] = {
+    {
+        "halt",
+        {
+            0,                  // halt
+            0b01000000, 0x3F    // push-u8 0x3F
+        },
+        REXLANG_ERR_HALTED,
+        1,
+        {
+            0   // expect the push-u8 to not be executed after the halt
+        },
+        NULL,
+    },
+    {
+        "nop",
+        {
+            1,                  // nop
+            0,                  // halt
+        },
+        REXLANG_ERR_HALTED,
+        0,
+        {
+            0
+        },
+        NULL,
+    },
+    {
+        "eq err1",
+        {
+            2,                  // eq
+            0,                  // halt
+        },
+        REXLANG_ERR_STACK_EMPTY,
+        0,
+        {
+            0
+        },
+        NULL,
+    },
+    {
+        "eq err2",
+        {
+            0b01000000, 0,      // push-u8 0
+            2,                  // eq
+            0,                  // halt
+        },
+        REXLANG_ERR_STACK_EMPTY,
+        0,
+        {
+            0
+        },
+        NULL,
+    },
+    {
+        "eq true",
+        {
+            0b01000000, 0,      // push-u8 0
+            0b01000000, 0,      // push-u8 0
+            2,                  // eq
+            0,                  // halt
+        },
+        REXLANG_ERR_HALTED,
+        1,
+        {
+            1
+        },
+        NULL,
+    },
+    {
+        "eq false",
+        {
+            0b01000000, 0,      // push-u8 0
+            0b01000000, 1,      // push-u8 0
+            2,                  // eq
+            0,                  // halt
+        },
+        REXLANG_ERR_HALTED,
+        1,
+        {
+            0
+        },
+        NULL,
+    },
     {
         "chip-set-addr",
         {
@@ -71,19 +154,6 @@ const struct test_t tests[] = {
         },
         test_chip_set_addr,
     },
-    {
-        "halt",
-        {
-            0,                  // halt
-            0b01000000, 0x3F    // push-u8 0x3F
-        },
-        REXLANG_ERR_HALTED,
-        1,
-        {
-            0   // expect the push-u8 to not be executed after the halt
-        },
-        NULL,
-    },
 };
 
 int exec_test(const struct test_t *t, char* msg) {
@@ -95,6 +165,7 @@ int exec_test(const struct test_t *t, char* msg) {
     err = rexlang_vm_exec(&vm, 1024);
 
     if (err != t->check_error) {
+        sprintf(msg, "error expected %d, got %d", t->check_error, err);
         return 1;
     }
 
