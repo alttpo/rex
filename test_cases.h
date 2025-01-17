@@ -40,7 +40,7 @@ const struct test_t tests[] = {
             2,                                  // eq
             0,                                  // halt
         },
-        REXLANG_ERR_STACK_EMPTY,
+        REXLANG_ERR_DATA_STACK_EMPTY,
         0,
         {
             0
@@ -54,7 +54,7 @@ const struct test_t tests[] = {
             0x02,                               // eq
             0,                                  // halt
         },
-        REXLANG_ERR_STACK_EMPTY,
+        REXLANG_ERR_DATA_STACK_EMPTY,
         0,
         {
             0
@@ -517,6 +517,21 @@ const struct test_t tests[] = {
         },
         NULL,
     },
+    {
+        "le-si-imm8 fails for u8 values",
+        {
+            0b01000000, (s8)-128,               // push-u8
+            0x45, (s8)127,                      // le-ui-imm8
+            0,                                  // halt
+        },
+        REXLANG_ERR_HALTED,
+        1,
+        {
+            0 // expect to fail because -128 was not sign-extended from the push-u8
+        },
+        NULL,
+    },
+
     {
         "chip-set-addr",
         {

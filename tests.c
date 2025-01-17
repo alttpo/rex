@@ -65,7 +65,7 @@ int exec_test(const struct test_t *t, char* msg) {
 
     for (int i = 0; i < t->check_stack_count; i++) {
         int n = sprintf(msg, "stack[%d]", i);
-        expect(t->check_stack_values[i], vm.ki[REXLANG_STACKSZ - i - 1], msg+n);
+        expect(t->check_stack_values[i], vm.ki[REXLANG_DATA_STACKSZ - i - 1], msg+n);
     }
 
     if (t->check_fn) {

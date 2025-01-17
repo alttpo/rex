@@ -26,7 +26,7 @@ static void opcode(struct rexlang_vm *vm)
 }
 
 #define pop(v) { \
-	if (unlikely(vm->sp >= REXLANG_STACKSZ)) { \
+	if (unlikely(vm->sp >= REXLANG_DATA_STACKSZ)) { \
 		goto error_stack_empty; \
 	} \
  \
@@ -280,11 +280,14 @@ static void opcode(struct rexlang_vm *vm)
 			break;
 		case 0x28: // call
 			pop(a);
-		impl_call:
-			push(vm->ip);
+			if (vm->cp == 0) {
+				vm->err = REXLANG_ERR_CALL_STACK_FULL;
+				goto error;
+			}
+			vm->cs[--vm->cp] = vm->ip;
 			vm->ip = a;
 			break;
-		case 0x29: // return / jump-abs
+		case 0x29: // jump-abs
 			pop(a);
 		impl_jump_abs:
 			vm->ip = a;
@@ -350,6 +353,13 @@ static void opcode(struct rexlang_vm *vm)
 			push(b >> a);
 			break;
 
+		case 0x38: // return
+			if (vm->cp >= REXLANG_CALL_STACKSZ) {
+				vm->err = REXLANG_ERR_CALL_STACK_EMPTY;
+				goto error;
+			}
+			vm->ip = vm->cs[vm->cp++];
+			break;
 		case 0x39: // not
 			pop(a);
 			push(!a);
@@ -555,7 +565,13 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_st_u32_offs_discard;
 		case 0x68: // call
 			a = rdipu8(vm);
-			goto impl_call;
+			if (vm->cp == 0) {
+				vm->err = REXLANG_ERR_CALL_STACK_FULL;
+				goto error;
+			}
+			vm->cs[--vm->cp] = vm->ip;
+			vm->ip = a;
+			break;
 		case 0x69: // return / jump-abs
 			a = rdipu8(vm);
 			goto impl_jump_abs;
@@ -590,6 +606,22 @@ static void opcode(struct rexlang_vm *vm)
 			a = rdipu8(vm);
 			pop(b);
 			push(b >> a);
+			break;
+		case 0x72: // ldsp-offs-imm8
+			a = rdipu8(vm);
+			if (vm->sp+a >= REXLANG_DATA_STACKSZ) {
+				vm->err = REXLANG_ERR_DATA_STACK_EMPTY;
+				goto error;
+			}
+			push(vm->ki[vm->sp+a]);
+			break;
+		case 0x73: // discard-imm8
+			a = rdipu8(vm);
+			vm->sp += a;
+			if (vm->sp >= REXLANG_DATA_STACKSZ) {
+				vm->err = REXLANG_ERR_DATA_STACK_EMPTY;
+				goto error;
+			}
 			break;
 
 		// 0x80..0xBF:
@@ -756,7 +788,13 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_st_u32_offs_discard;
 		case 0xA8: // call
 			a = rdipu16(vm);
-			goto impl_call;
+			if (vm->cp == 0) {
+				vm->err = REXLANG_ERR_CALL_STACK_FULL;
+				goto error;
+			}
+			vm->cs[--vm->cp] = vm->ip;
+			vm->ip = a;
+			break;
 		case 0xA9: // return / jump-abs
 			a = rdipu16(vm);
 			goto impl_jump_abs;
@@ -947,7 +985,13 @@ static void opcode(struct rexlang_vm *vm)
 			goto impl_st_u32_offs_discard;
 		case 0xE8: // call
 			a = rdipu32(vm);
-			goto impl_call;
+			if (vm->cp == 0) {
+				vm->err = REXLANG_ERR_CALL_STACK_FULL;
+				goto error;
+			}
+			vm->cs[--vm->cp] = vm->ip;
+			vm->ip = a;
+			break;
 		case 0xE9: // return / jump-abs
 			a = rdipu32(vm);
 			goto impl_jump_abs;
@@ -985,10 +1029,10 @@ static void opcode(struct rexlang_vm *vm)
 
 
 error_stack_empty:
-	vm->err = REXLANG_ERR_STACK_EMPTY;
+	vm->err = REXLANG_ERR_DATA_STACK_EMPTY;
 	goto error;
 error_stack_full:
-	vm->err = REXLANG_ERR_STACK_FULL;
+	vm->err = REXLANG_ERR_DATA_STACK_FULL;
 
 error:
 	longjmp(vm->j, vm->err);
@@ -1028,10 +1072,12 @@ void rexlang_vm_reset(struct rexlang_vm *vm)
 {
 	// reset IP and SP:
 	vm->ip = 0;
-	vm->sp = REXLANG_STACKSZ;
+	vm->sp = REXLANG_DATA_STACKSZ;
+	vm->cp = REXLANG_CALL_STACKSZ;
 	// we do not clear program memory nor data memory.
 	// clear stack:
-	memset(vm->ki, 0, sizeof(uint32_t)*REXLANG_STACKSZ);
+	memset(vm->ki, 0, sizeof(uint32_t)*REXLANG_DATA_STACKSZ);
+	memset(vm->cs, 0, sizeof(rexlang_ip)*REXLANG_CALL_STACKSZ);
 	// clear error status:
 	rexlang_vm_error_ack(vm);
 }

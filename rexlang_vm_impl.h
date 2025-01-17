@@ -123,7 +123,7 @@ static inline u32 rdipu32(struct rexlang_vm *vm)
 static inline void push(struct rexlang_vm *vm, u32 v)
 {
 	if (unlikely(vm->sp == 0)) {
-		throw_error(vm, REXLANG_ERR_STACK_FULL);
+		throw_error(vm, REXLANG_ERR_DATA_STACK_FULL);
 	}
 
 	// write the value into the stack:
@@ -132,8 +132,8 @@ static inline void push(struct rexlang_vm *vm, u32 v)
 
 static inline u32 pop(struct rexlang_vm *vm)
 {
-	if (unlikely(vm->sp >= REXLANG_STACKSZ)) {
-		throw_error(vm, REXLANG_ERR_STACK_EMPTY);
+	if (unlikely(vm->sp >= REXLANG_DATA_STACKSZ)) {
+		throw_error(vm, REXLANG_ERR_DATA_STACK_EMPTY);
 	}
 
 	// read the value from the stack and move the sp:

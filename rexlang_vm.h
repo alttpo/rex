@@ -13,8 +13,10 @@ enum rexlang_error {
 	REXLANG_ERR_SUCCESS = 0,
 	REXLANG_ERR_HALTED,
 	REXLANG_ERR_BAD_OPCODE,
-	REXLANG_ERR_STACK_EMPTY,
-	REXLANG_ERR_STACK_FULL,
+	REXLANG_ERR_DATA_STACK_EMPTY,
+	REXLANG_ERR_DATA_STACK_FULL,
+	REXLANG_ERR_CALL_STACK_EMPTY,
+	REXLANG_ERR_CALL_STACK_FULL,
 	REXLANG_ERR_DATA_ADDRESS_OUT_OF_BOUNDS,
 	REXLANG_ERR_PRGM_ADDRESS_OUT_OF_BOUNDS,
 	REXLANG_ERR_BAD_SYSCALL,
@@ -24,14 +26,16 @@ enum rexlang_error {
 typedef unsigned int rexlang_ip;
 typedef unsigned int rexlang_sp;
 
-#define REXLANG_STACKSZ 64
+#define REXLANG_DATA_STACKSZ 64
+#define REXLANG_CALL_STACKSZ 16
 
 struct rexlang_vm {
 	rexlang_ip ip;          // instruction pointer
-	rexlang_sp sp;          // stack pointer to free position
+	rexlang_sp sp;          // data stack pointer to free position
+	rexlang_sp cp;          // call stack pointer to free position
 	enum rexlang_error err; // enum rexlang_error
 
-	const uint8_t* m;             // program memory
+	const uint8_t* m;       // program memory
 	uint8_t* d;             // data memory
 
 	uint32_t m_size;
@@ -42,7 +46,8 @@ struct rexlang_vm {
 
 	rexlang_call_f syscall;
 
-	uint32_t ki[REXLANG_STACKSZ];      // stack items
+	rexlang_ip cs[REXLANG_CALL_STACKSZ];    // call stack IPs
+	uint32_t ki[REXLANG_DATA_STACKSZ];      // data stack items
 };
 
 void rexlang_vm_init(

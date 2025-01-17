@@ -7,7 +7,8 @@ Rexlang is designed to allow applications to generate and upload rexlang program
 The virtual machine uses a minimal set of native state variables to keep track of execution state:
 
   1. `IP`: Instruction Pointer
-  2. `SP`: Stack Pointer
+  2. `SP`: Data Stack Pointer
+  3. `CP`: Call Stack Pointer
 
 These state variables are not directly accessible by rexlang programs and are implementation details of the virtual machine.
 
@@ -32,13 +33,19 @@ All values in data and stack memory use the host's native endian byte order.
 
 All values in program memory use little endian byte order.
 
-## Stack
-All values on the stack must be of size `u32`.
+## Stacks
+There are two stacks: the data stack and the call stack.
+
+The data stack tracks pure values for computation as well as arguments pushed to a function call.
+
+The call stack tracks the return IPs when making nested function calls. It is only used for call and return instructions.
+
+All values on the data stack must be of size `u32`. The SP register increments and decrements in steps of 1 (not 4) for each `u32` value pushed or popped.
 
 ## Binary program format
 The rexlang binary program format is a compact and machine-friendly representation of a program as it appears in program memory.
 
-This binary format is a byte-aligned stream so that statements are fully addressable at the byte offset without requiring bit offsets. Great effort has been expended to make sure that this format is as efficient as possible with minimal overhead where necessary, short of turning the entire format into an unaligned bit stream of course.
+This binary format is a byte-aligned stream so that instructions are fully addressable at the byte offset without requiring bit offsets. Great effort has been expended to make sure that this format is as efficient as possible with minimal overhead where necessary, short of turning the entire format into an unaligned bit stream of course.
 
 The tables below describe the legal binary formats allowed for each component of a rexlang program.
 
@@ -68,264 +75,264 @@ The type names used are:
 | `ptr` | memory address, aka `u32` |
 
 ### Opcodes
-| Format                                         | Name                      | C    | B    | A    | X    | R1   | R2  | Operation                             |
-| ---------------------------------------------- | ------------------------- | ---- | ---- | ---- | ---- | ---- | --- | ------------------------------------- |
-| `00000000`                                     | halt                      |      |      |      |      |      |     |                                       |
-| `00000001`                                     | nop                       |      |      |      |      |      |     | no operation                          |
-| `00000010`                                     | eq                        |      | ui   | ui   |      | ui   |     | `b == a`                              |
-| `00000011`                                     | ne                        |      | ui   | ui   |      | ui   |     | `b != a`                              |
-| `00000100`                                     | le-ui                     |      | ui   | ui   |      | ui   |     | `b <= a`                              |
-| `00000101`                                     | le-si                     |      | si   | si   |      | ui   |     | `b <= a`                              |
-| `00000110`                                     | gt-ui                     |      | ui   | ui   |      | ui   |     | `b >  a`                              |
-| `00000111`                                     | gt-si                     |      | si   | si   |      | ui   |     | `b >  a`                              |
-| `00001000`                                     | lt-ui                     |      | ui   | ui   |      | ui   |     | `b <  a`                              |
-| `00001001`                                     | lt-si                     |      | si   | si   |      | ui   |     | `b <  a`                              |
-| `00001010`                                     | ge-ui                     |      | ui   | ui   |      | ui   |     | `b >= a`                              |
-| `00001011`                                     | ge-si                     |      | si   | si   |      | ui   |     | `b >= a`                              |
-| `00001100`                                     | and                       |      | ui   | ui   |      | ui   |     | `b &  a`                              |
-| `00001101`                                     | or                        |      | ui   | ui   |      | ui   |     | `b \| a`                              |
-| `00001110`                                     | xor                       |      | ui   | ui   |      | ui   |     | `b ^  a`                              |
-| `00001111`                                     | add                       |      | ui   | ui   |      | ui   |     | `b +  a`                              |
-| `00010000`                                     | sub                       |      | ui   | ui   |      | ui   |     | `b -  a`                              |
-| `00010001`                                     | mul                       |      | ui   | ui   |      | ui   |     | `b *  a`                              |
-| `00010010`                                     | ld-u8                     |      |      | dptr |      | u8   |     | `*( u8*)(&data[a])`                   |
-| `00010011`                                     | ld-u16                    |      |      | dptr |      | u16  |     | `*(u16*)(&data[a])`                   |
-| `00010100`                                     | ld-u32                    |      |      | dptr |      | u32  |     | `*(u32*)(&data[a])`                   |
-| `00010101`                                     | ld-u8--offs               |      | dptr | ui   |      | u8   |     | `*( u8*)(&data[b+a])`                 |
-| `00010110`                                     | ld-u16-offs               |      | dptr | ui   |      | u16  |     | `*(u16*)(&data[b+a])`                 |
-| `00010111`                                     | ld-u32-offs               |      | dptr | ui   |      | u32  |     | `*(u32*)(&data[b+a])`                 |
-| `00011000`                                     | ld-s8                     |      |      | dptr |      | s8   |     | `*( s8*)(&data[a])`                   |
-| `00011001`                                     | ld-s16                    |      |      | dptr |      | s16  |     | `*(s16*)(&data[a])`                   |
-| `00011010`                                     | ld-s8--offs               |      | dptr | ui   |      | s8   |     | `*( s8*)(&data[b+a])`                 |
-| `00011011`                                     | ld-s16-offs               |      | dptr | ui   |      | s16  |     | `*(s16*)(&data[b+a])`                 |
-| `00011100`                                     | st-u8                     |      | u8   | dptr |      | u8   |     | `*( u8*)(&data[a]) = b`               |
-| `00011101`                                     | st-u16                    |      | u16  | dptr |      | u16  |     | `*(u16*)(&data[a]) = b`               |
-| `00011110`                                     | st-u32                    |      | u32  | dptr |      | u32  |     | `*(u32*)(&data[a]) = b`               |
-| `00011111`                                     | st-u8--offs               | u8   | dptr | ui   |      | u8   |     | `*( u8*)(&data[b+a]) = c`             |
-| `00100000`                                     | st-u16-offs               | u16  | dptr | ui   |      | u16  |     | `*(u16*)(&data[b+a]) = c`             |
-| `00100001`                                     | st-u32-offs               | u32  | dptr | ui   |      | u32  |     | `*(u32*)(&data[b+a]) = c`             |
-| `00100010`                                     | st-u8--discard            |      | u8   | dptr |      |      |     | `*( u8*)(&data[a]) = b`               |
-| `00100011`                                     | st-u16-discard            |      | u16  | dptr |      |      |     | `*(u16*)(&data[a]) = b`               |
-| `00100100`                                     | st-u32-discard            |      | u32  | dptr |      |      |     | `*(u32*)(&data[a]) = b`               |
-| `00100101`                                     | st-u8--offs-discard       | u8   | dptr | ui   |      |      |     | `*( u8*)(&data[b+a]) = c`             |
-| `00100110`                                     | st-u16-offs-discard       | u16  | dptr | ui   |      |      |     | `*(u16*)(&data[b+a]) = c`             |
-| `00100111`                                     | st-u32-offs-discard       | u32  | dptr | ui   |      |      |     | `*(u32*)(&data[b+a]) = c`             |
-| `00101000`                                     | call                      |      |      | mptr |      | mptr |     | push IP; IP=x                         |
-| `00101001`                                     | return / jump-abs         |      |      | mptr |      |      |     | IP=a                                  |
-| `00101010`                                     | jump-abs-if               |      | ui   | mptr |      |      |     | IP=a if b != 0                        |
-| `00101011`                                     | jump-abs-if-not           |      | ui   | mptr |      |      |     | IP=a if b == 0                        |
-| `00101100`                                     | jump-rel                  |      |      | si   |      |      |     | IP+=(s32)a                            |
-| `00101101`                                     | jump-rel-if               |      | ui   | si   |      |      |     | IP+=(s32)a if b != 0                  |
-| `00101110`                                     | jump-rel-if-not           |      | ui   | si   |      |      |     | IP+=(s32)a if b == 0                  |
-| `00101111`                                     | syscall                   |      |      | ui   |      |      |     | invoke system function `a`            |
-| `00110000`                                     | shl                       |      | ui   | ui   |      | ui   |     | `b << a`                              |
-| `00110001`                                     | shr                       |      | ui   | ui   |      | ui   |     | `b >> a`                              |
-| `00110010`                                     | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `00110011`                                     | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `00110100`                                     | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `00110101`                                     | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `00110110`                                     | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `00110111`                                     | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `00111000`                                     | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `00111001`                                     | not                       |      |      | ui   |      | ui   |     | `!a`                                  |
-| `00111010`                                     | neg                       |      |      | si   |      | si   |     | `-a`                                  |
-| `00111011`                                     | discard                   |      |      | ui   |      |      |     | discards `a`                          |
-| `00111100`                                     | swap                      |      | ui   | ui   |      | ui   | ui  | push a; push b                        |
-| `00111101`                                     | dup                       |      |      | ui   |      | ui   | ui  | push a; push a                        |
-| `00111110`                                     | dcopy                     | dptr | dptr | ui   |      | ptr  |     | memcpy(data+c, data+b, a); push `c+a` |
-| `00111111`                                     | pcopy                     | dptr | mptr | ui   |      | ptr  |     | memcpy(data+c, prgm+b, a); push `c+a` |
-| `01000000_xxxxxxxx`                            | push-u8                   |      |      |      | u8   | u8   |     | push (u8)x                            |
-| `01000001_xxxxxxxx`                            | push-s8                   |      |      |      | s8   | s8   |     | push (s8)x                            |
-| `01000010_xxxxxxxx`                            | eq-imm8                   |      |      | ui   | u8   | ui   |     | `a == x`                              |
-| `01000011_xxxxxxxx`                            | ne-imm8                   |      |      | ui   | u8   | ui   |     | `a != x`                              |
-| `01000100_xxxxxxxx`                            | le-ui-imm8                |      |      | ui   | u8   | ui   |     | `a <= x`                              |
-| `01000101_xxxxxxxx`                            | le-si-imm8                |      |      | si   | s8   | ui   |     | `a <= x`                              |
-| `01000110_xxxxxxxx`                            | gt-ui-imm8                |      |      | ui   | u8   | ui   |     | `a >  x`                              |
-| `01000111_xxxxxxxx`                            | gt-si-imm8                |      |      | si   | s8   | ui   |     | `a >  x`                              |
-| `01001000_xxxxxxxx`                            | lt-ui-imm8                |      |      | ui   | u8   | ui   |     | `a <  x`                              |
-| `01001001_xxxxxxxx`                            | lt-si-imm8                |      |      | si   | s8   | ui   |     | `a <  x`                              |
-| `01001010_xxxxxxxx`                            | ge-ui-imm8                |      |      | ui   | u8   | ui   |     | `a >= x`                              |
-| `01001011_xxxxxxxx`                            | ge-si-imm8                |      |      | si   | s8   | ui   |     | `a >= x`                              |
-| `01001100_xxxxxxxx`                            | and-imm8                  |      |      | ui   | u8   | ui   |     | `a &  x`                              |
-| `01001101_xxxxxxxx`                            | or--imm8                  |      |      | ui   | u8   | ui   |     | `a \| x`                              |
-| `01001110_xxxxxxxx`                            | xor-imm8                  |      |      | ui   | u8   | ui   |     | `a ^  x`                              |
-| `01001111_xxxxxxxx`                            | add-imm8                  |      |      | ui   | u8   | ui   |     | `a +  x`                              |
-| `01010000_xxxxxxxx`                            | sub-imm8                  |      |      | ui   | u8   | ui   |     | `a -  x`                              |
-| `01010001_xxxxxxxx`                            | mul-imm8                  |      |      | ui   | u8   | ui   |     | `a *  x`                              |
-| `01010010_xxxxxxxx`                            | ld-u8-imm8                |      |      |      | dptr | u8   |     | `*( u8*)(&data[x])`                   |
-| `01010011_xxxxxxxx`                            | ld-u16-imm8               |      |      |      | dptr | u16  |     | `*(u16*)(&data[x])`                   |
-| `01010100_xxxxxxxx`                            | ld-u32-imm8               |      |      |      | dptr | u32  |     | `*(u32*)(&data[x])`                   |
-| `01010101_xxxxxxxx`                            | ld-u8--offs-imm8          |      |      | ui   | dptr | u8   |     | `*( u8*)(&data[x+a])`                 |
-| `01010110_xxxxxxxx`                            | ld-u16-offs-imm8          |      |      | ui   | dptr | u16  |     | `*(u16*)(&data[x+a])`                 |
-| `01010111_xxxxxxxx`                            | ld-u32-offs-imm8          |      |      | ui   | dptr | u32  |     | `*(u32*)(&data[x+a])`                 |
-| `01011000_xxxxxxxx`                            | ld-s8-imm8                |      |      |      | dptr | s8   |     | `*( s8*)(&data[x])`                   |
-| `01011001_xxxxxxxx`                            | ld-s16-imm8               |      |      |      | dptr | s16  |     | `*(s16*)(&data[x])`                   |
-| `01011010_xxxxxxxx`                            | ld-s8--offs-imm8          |      |      | ui   | dptr | s8   |     | `*( s8*)(&data[x+a])`                 |
-| `01011011_xxxxxxxx`                            | ld-s16-offs-imm8          |      |      | ui   | dptr | s16  |     | `*(s16*)(&data[x+a])`                 |
-| `01011100_xxxxxxxx`                            | st-u8-imm8                |      |      | u8   | dptr | u8   |     | `*( u8*)(&data[x]) = a`               |
-| `01011101_xxxxxxxx`                            | st-u16-imm8               |      |      | u16  | dptr | u16  |     | `*(u16*)(&data[x]) = a`               |
-| `01011110_xxxxxxxx`                            | st-u32-imm8               |      |      | u32  | dptr | u32  |     | `*(u32*)(&data[x]) = a`               |
-| `01011111_xxxxxxxx`                            | st-u8--offs-imm8          |      | u8   | ui   | dptr | u8   |     | `*( u8*)(&data[x+a]) = b`             |
-| `01100000_xxxxxxxx`                            | st-u16-offs-imm8          |      | u16  | ui   | dptr | u16  |     | `*(u16*)(&data[x+a]) = b`             |
-| `01100001_xxxxxxxx`                            | st-u32-offs-imm8          |      | u32  | ui   | dptr | u32  |     | `*(u32*)(&data[x+a]) = b`             |
-| `01100010_xxxxxxxx`                            | st-u8--discard-imm8       |      |      | u8   | dptr |      |     | `*( u8*)(&data[x]) = a`               |
-| `01100011_xxxxxxxx`                            | st-u16-discard-imm8       |      |      | u16  | dptr |      |     | `*(u16*)(&data[x]) = a`               |
-| `01100100_xxxxxxxx`                            | st-u32-discard-imm8       |      |      | u32  | dptr |      |     | `*(u32*)(&data[x]) = a`               |
-| `01100101_xxxxxxxx`                            | st-u8--offs-discard-imm8  |      | u8   | ui   | dptr |      |     | `*( u8*)(&data[x+a]) = b`             |
-| `01100110_xxxxxxxx`                            | st-u16-offs-discard-imm8  |      | u16  | ui   | dptr |      |     | `*(u16*)(&data[x+a]) = b`             |
-| `01100111_xxxxxxxx`                            | st-u32-offs-discard-imm8  |      | u32  | ui   | dptr |      |     | `*(u32*)(&data[x+a]) = b`             |
-| `01101000_xxxxxxxx`                            | call-imm8                 |      |      |      | mptr | mptr |     | push IP; IP=x                         |
-| `01101001_xxxxxxxx`                            | jump-abs-imm8             |      |      |      | mptr |      |     | IP=x                                  |
-| `01101010_xxxxxxxx`                            | jump-abs-if-imm8          |      |      | ui   | mptr |      |     | IP=x if a != 0                        |
-| `01101011_xxxxxxxx`                            | jump-abs-if-not-imm8      |      |      | ui   | mptr |      |     | IP=x if a == 0                        |
-| `01101100_xxxxxxxx`                            | jump-rel-imm8             |      |      |      | si   |      |     | IP+=(s8)x                             |
-| `01101101_xxxxxxxx`                            | jump-rel-if-imm8          |      |      | ui   | si   |      |     | IP+=(s8)x if a != 0                   |
-| `01101110_xxxxxxxx`                            | jump-rel-if-not-imm8      |      |      | ui   | si   |      |     | IP+=(s8)x if a == 0                   |
-| `01101111_xxxxxxxx`                            | syscall-imm8              |      |      |      | ui   |      |     | invoke system function `x`            |
-| `01110000_000xxxxx`                            | shl-imm-u8                |      |      | ui   | u8   | ui   |     | `a << x`                              |
-| `01110001_000xxxxx`                            | shr-imm-u8                |      |      | ui   | u8   | ui   |     | `a >> x`                              |
-| `01110010_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01110011_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01110100_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01110101_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01110110_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01110111_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01111000_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01111001_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01111010_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01111011_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01111100_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01111101_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01111110_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `01111111_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10000000_xxxxxxxx_xxxxxxxx`                   | push-u16                  |      |      |      | u16  | u16  |     | push (u16)x                           |
-| `10000001_xxxxxxxx_xxxxxxxx`                   | push-s16                  |      |      |      | s16  | s16  |     | push (s16)x                           |
-| `10000010_xxxxxxxx_xxxxxxxx`                   | eq-imm16                  |      |      | ui   | u16  | ui   |     | `a == x`                              |
-| `10000011_xxxxxxxx_xxxxxxxx`                   | ne-imm16                  |      |      | ui   | u16  | ui   |     | `a != x`                              |
-| `10000100_xxxxxxxx_xxxxxxxx`                   | le-ui-imm16               |      |      | ui   | u16  | ui   |     | `a <= x`                              |
-| `10000101_xxxxxxxx_xxxxxxxx`                   | le-si-imm16               |      |      | si   | s16  | ui   |     | `a <= x`                              |
-| `10000110_xxxxxxxx_xxxxxxxx`                   | gt-ui-imm16               |      |      | ui   | u16  | ui   |     | `a >  x`                              |
-| `10000111_xxxxxxxx_xxxxxxxx`                   | gt-si-imm16               |      |      | si   | s16  | ui   |     | `a >  x`                              |
-| `10001000_xxxxxxxx_xxxxxxxx`                   | lt-ui-imm16               |      |      | ui   | u16  | ui   |     | `a <  x`                              |
-| `10001001_xxxxxxxx_xxxxxxxx`                   | lt-si-imm16               |      |      | si   | s16  | ui   |     | `a <  x`                              |
-| `10001010_xxxxxxxx_xxxxxxxx`                   | ge-ui-imm16               |      |      | ui   | u16  | ui   |     | `a >= x`                              |
-| `10001011_xxxxxxxx_xxxxxxxx`                   | ge-si-imm16               |      |      | si   | s16  | ui   |     | `a >= x`                              |
-| `10001100_xxxxxxxx_xxxxxxxx`                   | and-imm16                 |      |      | ui   | u16  | ui   |     | `a &  x`                              |
-| `10001101_xxxxxxxx_xxxxxxxx`                   | or--imm16                 |      |      | ui   | u16  | ui   |     | `a \| x`                              |
-| `10001110_xxxxxxxx_xxxxxxxx`                   | xor-imm16                 |      |      | ui   | u16  | ui   |     | `a ^  x`                              |
-| `10001111_xxxxxxxx_xxxxxxxx`                   | add-imm16                 |      |      | ui   | u16  | ui   |     | `a +  x`                              |
-| `10010000_xxxxxxxx_xxxxxxxx`                   | sub-imm16                 |      |      | ui   | u16  | ui   |     | `a -  x`                              |
-| `10010001_xxxxxxxx_xxxxxxxx`                   | mul-imm16                 |      |      | ui   | u16  | ui   |     | `a *  x`                              |
-| `10010010_xxxxxxxx_xxxxxxxx`                   | ld-u8-imm16               |      |      |      | dptr | u8   |     | `*( u8*)(&data[x])`                   |
-| `10010011_xxxxxxxx_xxxxxxxx`                   | ld-u16-imm16              |      |      |      | dptr | u16  |     | `*(u16*)(&data[x])`                   |
-| `10010100_xxxxxxxx_xxxxxxxx`                   | ld-u32-imm16              |      |      |      | dptr | u32  |     | `*(u32*)(&data[x])`                   |
-| `10010101_xxxxxxxx_xxxxxxxx`                   | ld-u8--offs-imm16         |      |      | ui   | dptr | u8   |     | `*( u8*)(&data[x+a])`                 |
-| `10010110_xxxxxxxx_xxxxxxxx`                   | ld-u16-offs-imm16         |      |      | ui   | dptr | u16  |     | `*(u16*)(&data[x+a])`                 |
-| `10010111_xxxxxxxx_xxxxxxxx`                   | ld-u32-offs-imm16         |      |      | ui   | dptr | u32  |     | `*(u32*)(&data[x+a])`                 |
-| `10011000_xxxxxxxx_xxxxxxxx`                   | ld-s8-imm16               |      |      |      | dptr | s8   |     | `*( s8*)(&data[x])`                   |
-| `10011001_xxxxxxxx_xxxxxxxx`                   | ld-s16-imm16              |      |      |      | dptr | s16  |     | `*(s16*)(&data[x])`                   |
-| `10011010_xxxxxxxx_xxxxxxxx`                   | ld-s8--offs-imm16         |      |      | ui   | dptr | s8   |     | `*( s8*)(&data[x+a])`                 |
-| `10011011_xxxxxxxx_xxxxxxxx`                   | ld-s16-offs-imm16         |      |      | ui   | dptr | s16  |     | `*(s16*)(&data[x+a])`                 |
-| `10011100_xxxxxxxx_xxxxxxxx`                   | st-u8-imm16               |      |      | u8   | dptr | u8   |     | `*( u8*)(&data[x]) = a`               |
-| `10011101_xxxxxxxx_xxxxxxxx`                   | st-u16-imm16              |      |      | u16  | dptr | u16  |     | `*(u16*)(&data[x]) = a`               |
-| `10011110_xxxxxxxx_xxxxxxxx`                   | st-u32-imm16              |      |      | u32  | dptr | u32  |     | `*(u32*)(&data[x]) = a`               |
-| `10011111_xxxxxxxx_xxxxxxxx`                   | st-u8--offs-imm16         |      | u8   | ui   | dptr | u8   |     | `*( u8*)(&data[x+a]) = b`             |
-| `10100000_xxxxxxxx_xxxxxxxx`                   | st-u16-offs-imm16         |      | u16  | ui   | dptr | u16  |     | `*(u16*)(&data[x+a]) = b`             |
-| `10100001_xxxxxxxx_xxxxxxxx`                   | st-u32-offs-imm16         |      | u32  | ui   | dptr | u32  |     | `*(u32*)(&data[x+a]) = b`             |
-| `10100010_xxxxxxxx_xxxxxxxx`                   | st-u8--discard-imm16      |      |      | u8   | dptr |      |     | `*( u8*)(&data[x]) = a`               |
-| `10100011_xxxxxxxx_xxxxxxxx`                   | st-u16-discard-imm16      |      |      | u16  | dptr |      |     | `*(u16*)(&data[x]) = a`               |
-| `10100100_xxxxxxxx_xxxxxxxx`                   | st-u32-discard-imm16      |      |      | u32  | dptr |      |     | `*(u32*)(&data[x]) = a`               |
-| `10100101_xxxxxxxx_xxxxxxxx`                   | st-u8--offs-discard-imm16 |      | u8   | ui   | dptr |      |     | `*( u8*)(&data[x+a]) = b`             |
-| `10100110_xxxxxxxx_xxxxxxxx`                   | st-u16-offs-discard-imm16 |      | u16  | ui   | dptr |      |     | `*(u16*)(&data[x+a]) = b`             |
-| `10100111_xxxxxxxx_xxxxxxxx`                   | st-u32-offs-discard-imm16 |      | u32  | ui   | dptr |      |     | `*(u32*)(&data[x+a]) = b`             |
-| `10101000_xxxxxxxx_xxxxxxxx`                   | call-imm16                |      |      |      | mptr | mptr |     | push IP; IP=x                         |
-| `10101001_xxxxxxxx_xxxxxxxx`                   | jump-abs-imm16            |      |      |      | mptr |      |     | IP=x                                  |
-| `10101010_xxxxxxxx_xxxxxxxx`                   | jump-abs-if-imm16         |      |      | ui   | mptr |      |     | IP=x if a != 0                        |
-| `10101011_xxxxxxxx_xxxxxxxx`                   | jump-abs-if-not-imm16     |      |      | ui   | mptr |      |     | IP=x if a == 0                        |
-| `10101100_xxxxxxxx_xxxxxxxx`                   | jump-rel-imm16            |      |      |      | s16  |      |     | IP+=(s16)x                            |
-| `10101101_xxxxxxxx_xxxxxxxx`                   | jump-rel-if-imm16         |      |      | ui   | s16  |      |     | IP+=(s16)x if a != 0                  |
-| `10101110_xxxxxxxx_xxxxxxxx`                   | jump-rel-if-not-imm16     |      |      | ui   | s16  |      |     | IP+=(s16)x if a == 0                  |
-| `10101111_xxxxxxxx_xxxxxxxx`                   | syscall-imm16             |      |      |      | u16  |      |     | invoke system function `x`            |
-| `10110000_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10110001_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10110010_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10110011_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10110100_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10110101_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10110110_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10110111_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10111000_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10111001_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10111010_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10111011_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10111100_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10111101_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10111110_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `10111111_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11000000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | push-u32                  |      |      |      | u32  | u32  |     | push (u32)x                           |
-| `11000001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | push-s32                  |      |      |      | s32  | s32  |     | push (s32)x                           |
-| `11000010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | eq-imm32                  |      |      | ui   | u32  | ui   |     | `a == x`                              |
-| `11000011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ne-imm32                  |      |      | ui   | u32  | ui   |     | `a != x`                              |
-| `11000100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | le-ui-imm32               |      |      | ui   | u32  | ui   |     | `a <= x`                              |
-| `11000101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | le-si-imm32               |      |      | si   | s32  | ui   |     | `a <= x`                              |
-| `11000110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | gt-ui-imm32               |      |      | ui   | u32  | ui   |     | `a >  x`                              |
-| `11000111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | gt-si-imm32               |      |      | si   | s32  | ui   |     | `a >  x`                              |
-| `11001000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | lt-ui-imm32               |      |      | ui   | u32  | ui   |     | `a <  x`                              |
-| `11001001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | lt-si-imm32               |      |      | si   | s32  | ui   |     | `a <  x`                              |
-| `11001010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ge-ui-imm32               |      |      | ui   | u32  | ui   |     | `a >= x`                              |
-| `11001011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ge-si-imm32               |      |      | si   | s32  | ui   |     | `a >= x`                              |
-| `11001100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | and-imm32                 |      |      | ui   | u32  | ui   |     | `a &  x`                              |
-| `11001101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | or--imm32                 |      |      | ui   | u32  | ui   |     | `a \| x`                              |
-| `11001110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | xor-imm32                 |      |      | ui   | u32  | ui   |     | `a ^  x`                              |
-| `11001111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | add-imm32                 |      |      | ui   | u32  | ui   |     | `a +  x`                              |
-| `11010000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | sub-imm32                 |      |      | ui   | u32  | ui   |     | `a -  x`                              |
-| `11010001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | mul-imm32                 |      |      | ui   | u32  | ui   |     | `a *  x`                              |
-| `11010010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-u8-imm32               |      |      |      | dptr | u8   |     | `*( u8*)(&data[x])`                   |
-| `11010011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-u16-imm32              |      |      |      | dptr | u16  |     | `*(u16*)(&data[x])`                   |
-| `11010100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-u32-imm32              |      |      |      | dptr | u32  |     | `*(u32*)(&data[x])`                   |
-| `11010101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-u8--offs-imm32         |      |      | ui   | dptr | u8   |     | `*( u8*)(&data[x+a])`                 |
-| `11010110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-u16-offs-imm32         |      |      | ui   | dptr | u16  |     | `*(u16*)(&data[x+a])`                 |
-| `11010111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-u32-offs-imm32         |      |      | ui   | dptr | u32  |     | `*(u32*)(&data[x+a])`                 |
-| `11011000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-s8-imm32               |      |      |      | dptr | s8   |     | `*( s8*)(&data[x])`                   |
-| `11011001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-s16-imm32              |      |      |      | dptr | s16  |     | `*(s16*)(&data[x])`                   |
-| `11011010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-s8--offs-imm32         |      |      | ui   | dptr | s8   |     | `*( s8*)(&data[x+a])`                 |
-| `11011011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-s16-offs-imm32         |      |      | ui   | dptr | s16  |     | `*(s16*)(&data[x+a])`                 |
-| `11011100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u8-imm32               |      |      | u8   | dptr | u8   |     | `*( u8*)(&data[x]) = a`               |
-| `11011101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u16-imm32              |      |      | u16  | dptr | u16  |     | `*(u16*)(&data[x]) = a`               |
-| `11011110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u32-imm32              |      |      | u32  | dptr | u32  |     | `*(u32*)(&data[x]) = a`               |
-| `11011111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u8--offs-imm32         |      | u8   | ui   | dptr | u8   |     | `*( u8*)(&data[x+a]) = b`             |
-| `11100000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u16-offs-imm32         |      | u16  | ui   | dptr | u16  |     | `*(u16*)(&data[x+a]) = b`             |
-| `11100001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u32-offs-imm32         |      | u32  | ui   | dptr | u32  |     | `*(u32*)(&data[x+a]) = b`             |
-| `11100010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u8--discard-imm32      |      |      | u8   | dptr |      |     | `*( u8*)(&data[x]) = a`               |
-| `11100011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u16-discard-imm32      |      |      | u16  | dptr |      |     | `*(u16*)(&data[x]) = a`               |
-| `11100100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u32-discard-imm32      |      |      | u32  | dptr |      |     | `*(u32*)(&data[x]) = a`               |
-| `11100101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u8--offs-discard-imm32 |      | u8   | ui   | dptr |      |     | `*( u8*)(&data[x+a]) = b`             |
-| `11100110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u16-offs-discard-imm32 |      | u16  | ui   | dptr |      |     | `*(u16*)(&data[x+a]) = b`             |
-| `11100111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u32-offs-discard-imm32 |      | u32  | ui   | dptr |      |     | `*(u32*)(&data[x+a]) = b`             |
-| `11101000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | call-imm32                |      |      |      | mptr | mptr |     | push IP; IP=x                         |
-| `11101001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | jump-abs-imm32            |      |      |      | mptr |      |     | IP=x                                  |
-| `11101010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | jump-abs-if-imm32         |      |      | ui   | mptr |      |     | IP=x if a != 0                        |
-| `11101011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | jump-abs-if-not-imm32     |      |      | ui   | mptr |      |     | IP=x if a == 0                        |
-| `11101100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | jump-rel-imm32            |      |      |      | s32  |      |     | IP+=(s32)x                            |
-| `11101101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | jump-rel-if-imm32         |      |      | ui   | s32  |      |     | IP+=(s32)x if a != 0                  |
-| `11101110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | jump-rel-if-not-imm32     |      |      | ui   | s32  |      |     | IP+=(s32)x if a == 0                  |
-| `11101111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | syscall-imm32             |      |      |      | u32  |      |     | invoke system function `x`            |
-| `11110000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11110001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11110010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11110011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11110100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11110101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11110110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11110111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11111000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11111001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11111010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11111011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11111100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11111101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11111110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
-| `11111111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |      |     |                                       |
+| Format                                         | Name                      | C    | B    | A    | X    | R1  | R2  | Operation                             |
+| ---------------------------------------------- | ------------------------- | ---- | ---- | ---- | ---- | --- | --- | ------------------------------------- |
+| `00000000`                                     | halt                      |      |      |      |      |     |     |                                       |
+| `00000001`                                     | nop                       |      |      |      |      |     |     | no operation                          |
+| `00000010`                                     | eq                        |      | ui   | ui   |      | ui  |     | `b == a`                              |
+| `00000011`                                     | ne                        |      | ui   | ui   |      | ui  |     | `b != a`                              |
+| `00000100`                                     | le-ui                     |      | ui   | ui   |      | ui  |     | `b <= a`                              |
+| `00000101`                                     | le-si                     |      | si   | si   |      | ui  |     | `b <= a`                              |
+| `00000110`                                     | gt-ui                     |      | ui   | ui   |      | ui  |     | `b >  a`                              |
+| `00000111`                                     | gt-si                     |      | si   | si   |      | ui  |     | `b >  a`                              |
+| `00001000`                                     | lt-ui                     |      | ui   | ui   |      | ui  |     | `b <  a`                              |
+| `00001001`                                     | lt-si                     |      | si   | si   |      | ui  |     | `b <  a`                              |
+| `00001010`                                     | ge-ui                     |      | ui   | ui   |      | ui  |     | `b >= a`                              |
+| `00001011`                                     | ge-si                     |      | si   | si   |      | ui  |     | `b >= a`                              |
+| `00001100`                                     | and                       |      | ui   | ui   |      | ui  |     | `b &  a`                              |
+| `00001101`                                     | or                        |      | ui   | ui   |      | ui  |     | `b \| a`                              |
+| `00001110`                                     | xor                       |      | ui   | ui   |      | ui  |     | `b ^  a`                              |
+| `00001111`                                     | add                       |      | ui   | ui   |      | ui  |     | `b +  a`                              |
+| `00010000`                                     | sub                       |      | ui   | ui   |      | ui  |     | `b -  a`                              |
+| `00010001`                                     | mul                       |      | ui   | ui   |      | ui  |     | `b *  a`                              |
+| `00010010`                                     | ld-u8                     |      |      | dptr |      | u8  |     | `*( u8*)(&data[a])`                   |
+| `00010011`                                     | ld-u16                    |      |      | dptr |      | u16 |     | `*(u16*)(&data[a])`                   |
+| `00010100`                                     | ld-u32                    |      |      | dptr |      | u32 |     | `*(u32*)(&data[a])`                   |
+| `00010101`                                     | ld-u8--offs               |      | dptr | ui   |      | u8  |     | `*( u8*)(&data[b+a])`                 |
+| `00010110`                                     | ld-u16-offs               |      | dptr | ui   |      | u16 |     | `*(u16*)(&data[b+a])`                 |
+| `00010111`                                     | ld-u32-offs               |      | dptr | ui   |      | u32 |     | `*(u32*)(&data[b+a])`                 |
+| `00011000`                                     | ld-s8                     |      |      | dptr |      | s8  |     | `*( s8*)(&data[a])`                   |
+| `00011001`                                     | ld-s16                    |      |      | dptr |      | s16 |     | `*(s16*)(&data[a])`                   |
+| `00011010`                                     | ld-s8--offs               |      | dptr | ui   |      | s8  |     | `*( s8*)(&data[b+a])`                 |
+| `00011011`                                     | ld-s16-offs               |      | dptr | ui   |      | s16 |     | `*(s16*)(&data[b+a])`                 |
+| `00011100`                                     | st-u8                     |      | u8   | dptr |      | u8  |     | `*( u8*)(&data[a]) = b`               |
+| `00011101`                                     | st-u16                    |      | u16  | dptr |      | u16 |     | `*(u16*)(&data[a]) = b`               |
+| `00011110`                                     | st-u32                    |      | u32  | dptr |      | u32 |     | `*(u32*)(&data[a]) = b`               |
+| `00011111`                                     | st-u8--offs               | u8   | dptr | ui   |      | u8  |     | `*( u8*)(&data[b+a]) = c`             |
+| `00100000`                                     | st-u16-offs               | u16  | dptr | ui   |      | u16 |     | `*(u16*)(&data[b+a]) = c`             |
+| `00100001`                                     | st-u32-offs               | u32  | dptr | ui   |      | u32 |     | `*(u32*)(&data[b+a]) = c`             |
+| `00100010`                                     | st-u8--discard            |      | u8   | dptr |      |     |     | `*( u8*)(&data[a]) = b`               |
+| `00100011`                                     | st-u16-discard            |      | u16  | dptr |      |     |     | `*(u16*)(&data[a]) = b`               |
+| `00100100`                                     | st-u32-discard            |      | u32  | dptr |      |     |     | `*(u32*)(&data[a]) = b`               |
+| `00100101`                                     | st-u8--offs-discard       | u8   | dptr | ui   |      |     |     | `*( u8*)(&data[b+a]) = c`             |
+| `00100110`                                     | st-u16-offs-discard       | u16  | dptr | ui   |      |     |     | `*(u16*)(&data[b+a]) = c`             |
+| `00100111`                                     | st-u32-offs-discard       | u32  | dptr | ui   |      |     |     | `*(u32*)(&data[b+a]) = c`             |
+| `00101000`                                     | call                      |      |      | mptr |      |     |     | `cpush(IP); IP=a`                     |
+| `00101001`                                     | jump-abs                  |      |      | mptr |      |     |     | `IP=a`                                |
+| `00101010`                                     | jump-abs-if               |      | ui   | mptr |      |     |     | `IP=a if b != 0`                      |
+| `00101011`                                     | jump-abs-if-not           |      | ui   | mptr |      |     |     | `IP=a if b == 0`                      |
+| `00101100`                                     | jump-rel                  |      |      | si   |      |     |     | `IP+=(s32)a`                          |
+| `00101101`                                     | jump-rel-if               |      | ui   | si   |      |     |     | `IP+=(s32)a if b != 0`                |
+| `00101110`                                     | jump-rel-if-not           |      | ui   | si   |      |     |     | `IP+=(s32)a if b == 0`                |
+| `00101111`                                     | syscall                   |      |      | ui   |      |     |     | invoke system function `a`            |
+| `00110000`                                     | shl                       |      | ui   | ui   |      | ui  |     | `b << a`                              |
+| `00110001`                                     | shr                       |      | ui   | ui   |      | ui  |     | `b >> a`                              |
+| `00110010`                                     | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `00110011`                                     | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `00110100`                                     | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `00110101`                                     | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `00110110`                                     | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `00110111`                                     | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `00111000`                                     | return                    |      |      |      |      |     |     | `IP=cpop()`                           |
+| `00111001`                                     | not                       |      |      | ui   |      | ui  |     | `!a`                                  |
+| `00111010`                                     | neg                       |      |      | si   |      | si  |     | `-a`                                  |
+| `00111011`                                     | discard                   |      |      | ui   |      |     |     | discards `a`                          |
+| `00111100`                                     | swap                      |      | ui   | ui   |      | ui  | ui  | push a; push b                        |
+| `00111101`                                     | dup                       |      |      | ui   |      | ui  | ui  | push a; push a                        |
+| `00111110`                                     | dcopy                     | dptr | dptr | ui   |      | ptr |     | memcpy(data+c, data+b, a); push `c+a` |
+| `00111111`                                     | pcopy                     | dptr | mptr | ui   |      | ptr |     | memcpy(data+c, prgm+b, a); push `c+a` |
+| `01000000_xxxxxxxx`                            | push-u8                   |      |      |      | u8   | u8  |     | push (u8)x                            |
+| `01000001_xxxxxxxx`                            | push-s8                   |      |      |      | s8   | s8  |     | push (s8)x                            |
+| `01000010_xxxxxxxx`                            | eq-imm8                   |      |      | ui   | u8   | ui  |     | `a == x`                              |
+| `01000011_xxxxxxxx`                            | ne-imm8                   |      |      | ui   | u8   | ui  |     | `a != x`                              |
+| `01000100_xxxxxxxx`                            | le-ui-imm8                |      |      | ui   | u8   | ui  |     | `a <= x`                              |
+| `01000101_xxxxxxxx`                            | le-si-imm8                |      |      | si   | s8   | ui  |     | `a <= x`                              |
+| `01000110_xxxxxxxx`                            | gt-ui-imm8                |      |      | ui   | u8   | ui  |     | `a >  x`                              |
+| `01000111_xxxxxxxx`                            | gt-si-imm8                |      |      | si   | s8   | ui  |     | `a >  x`                              |
+| `01001000_xxxxxxxx`                            | lt-ui-imm8                |      |      | ui   | u8   | ui  |     | `a <  x`                              |
+| `01001001_xxxxxxxx`                            | lt-si-imm8                |      |      | si   | s8   | ui  |     | `a <  x`                              |
+| `01001010_xxxxxxxx`                            | ge-ui-imm8                |      |      | ui   | u8   | ui  |     | `a >= x`                              |
+| `01001011_xxxxxxxx`                            | ge-si-imm8                |      |      | si   | s8   | ui  |     | `a >= x`                              |
+| `01001100_xxxxxxxx`                            | and-imm8                  |      |      | ui   | u8   | ui  |     | `a &  x`                              |
+| `01001101_xxxxxxxx`                            | or--imm8                  |      |      | ui   | u8   | ui  |     | `a \| x`                              |
+| `01001110_xxxxxxxx`                            | xor-imm8                  |      |      | ui   | u8   | ui  |     | `a ^  x`                              |
+| `01001111_xxxxxxxx`                            | add-imm8                  |      |      | ui   | u8   | ui  |     | `a +  x`                              |
+| `01010000_xxxxxxxx`                            | sub-imm8                  |      |      | ui   | u8   | ui  |     | `a -  x`                              |
+| `01010001_xxxxxxxx`                            | mul-imm8                  |      |      | ui   | u8   | ui  |     | `a *  x`                              |
+| `01010010_xxxxxxxx`                            | ld-u8-imm8                |      |      |      | dptr | u8  |     | `*( u8*)(&data[x])`                   |
+| `01010011_xxxxxxxx`                            | ld-u16-imm8               |      |      |      | dptr | u16 |     | `*(u16*)(&data[x])`                   |
+| `01010100_xxxxxxxx`                            | ld-u32-imm8               |      |      |      | dptr | u32 |     | `*(u32*)(&data[x])`                   |
+| `01010101_xxxxxxxx`                            | ld-u8--offs-imm8          |      |      | ui   | dptr | u8  |     | `*( u8*)(&data[x+a])`                 |
+| `01010110_xxxxxxxx`                            | ld-u16-offs-imm8          |      |      | ui   | dptr | u16 |     | `*(u16*)(&data[x+a])`                 |
+| `01010111_xxxxxxxx`                            | ld-u32-offs-imm8          |      |      | ui   | dptr | u32 |     | `*(u32*)(&data[x+a])`                 |
+| `01011000_xxxxxxxx`                            | ld-s8-imm8                |      |      |      | dptr | s8  |     | `*( s8*)(&data[x])`                   |
+| `01011001_xxxxxxxx`                            | ld-s16-imm8               |      |      |      | dptr | s16 |     | `*(s16*)(&data[x])`                   |
+| `01011010_xxxxxxxx`                            | ld-s8--offs-imm8          |      |      | ui   | dptr | s8  |     | `*( s8*)(&data[x+a])`                 |
+| `01011011_xxxxxxxx`                            | ld-s16-offs-imm8          |      |      | ui   | dptr | s16 |     | `*(s16*)(&data[x+a])`                 |
+| `01011100_xxxxxxxx`                            | st-u8-imm8                |      |      | u8   | dptr | u8  |     | `*( u8*)(&data[x]) = a`               |
+| `01011101_xxxxxxxx`                            | st-u16-imm8               |      |      | u16  | dptr | u16 |     | `*(u16*)(&data[x]) = a`               |
+| `01011110_xxxxxxxx`                            | st-u32-imm8               |      |      | u32  | dptr | u32 |     | `*(u32*)(&data[x]) = a`               |
+| `01011111_xxxxxxxx`                            | st-u8--offs-imm8          |      | u8   | ui   | dptr | u8  |     | `*( u8*)(&data[x+a]) = b`             |
+| `01100000_xxxxxxxx`                            | st-u16-offs-imm8          |      | u16  | ui   | dptr | u16 |     | `*(u16*)(&data[x+a]) = b`             |
+| `01100001_xxxxxxxx`                            | st-u32-offs-imm8          |      | u32  | ui   | dptr | u32 |     | `*(u32*)(&data[x+a]) = b`             |
+| `01100010_xxxxxxxx`                            | st-u8--discard-imm8       |      |      | u8   | dptr |     |     | `*( u8*)(&data[x]) = a`               |
+| `01100011_xxxxxxxx`                            | st-u16-discard-imm8       |      |      | u16  | dptr |     |     | `*(u16*)(&data[x]) = a`               |
+| `01100100_xxxxxxxx`                            | st-u32-discard-imm8       |      |      | u32  | dptr |     |     | `*(u32*)(&data[x]) = a`               |
+| `01100101_xxxxxxxx`                            | st-u8--offs-discard-imm8  |      | u8   | ui   | dptr |     |     | `*( u8*)(&data[x+a]) = b`             |
+| `01100110_xxxxxxxx`                            | st-u16-offs-discard-imm8  |      | u16  | ui   | dptr |     |     | `*(u16*)(&data[x+a]) = b`             |
+| `01100111_xxxxxxxx`                            | st-u32-offs-discard-imm8  |      | u32  | ui   | dptr |     |     | `*(u32*)(&data[x+a]) = b`             |
+| `01101000_xxxxxxxx`                            | call-imm8                 |      |      |      | mptr |     |     | `cpush(IP); IP=x`                     |
+| `01101001_xxxxxxxx`                            | jump-abs-imm8             |      |      |      | mptr |     |     | `IP=x`                                |
+| `01101010_xxxxxxxx`                            | jump-abs-if-imm8          |      |      | ui   | mptr |     |     | `IP=x if a != 0`                      |
+| `01101011_xxxxxxxx`                            | jump-abs-if-not-imm8      |      |      | ui   | mptr |     |     | `IP=x if a == 0`                      |
+| `01101100_xxxxxxxx`                            | jump-rel-imm8             |      |      |      | si   |     |     | `IP+=(s8)x`                           |
+| `01101101_xxxxxxxx`                            | jump-rel-if-imm8          |      |      | ui   | si   |     |     | `IP+=(s8)x if a != 0`                 |
+| `01101110_xxxxxxxx`                            | jump-rel-if-not-imm8      |      |      | ui   | si   |     |     | `IP+=(s8)x if a == 0`                 |
+| `01101111_xxxxxxxx`                            | syscall-imm8              |      |      |      | ui   |     |     | invoke system function `x`            |
+| `01110000_000xxxxx`                            | shl-imm8                  |      |      | ui   | u8   | ui  |     | `a << x`                              |
+| `01110001_000xxxxx`                            | shr-imm8                  |      |      | ui   | u8   | ui  |     | `a >> x`                              |
+| `01110010_xxxxxxxx`                            | ldsp-offs-imm8            |      |      |      | u8   | ui  |     | load ui from SP+x                     |
+| `01110011_xxxxxxxx`                            | discard-imm8              |      |      |      | u8   |     |     | discards `x` stack items              |
+| `01110100_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `01110101_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `01110110_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `01110111_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `01111000_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `01111001_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `01111010_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `01111011_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `01111100_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `01111101_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `01111110_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `01111111_xxxxxxxx`                            | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10000000_xxxxxxxx_xxxxxxxx`                   | push-u16                  |      |      |      | u16  | u16 |     | push (u16)x                           |
+| `10000001_xxxxxxxx_xxxxxxxx`                   | push-s16                  |      |      |      | s16  | s16 |     | push (s16)x                           |
+| `10000010_xxxxxxxx_xxxxxxxx`                   | eq-imm16                  |      |      | ui   | u16  | ui  |     | `a == x`                              |
+| `10000011_xxxxxxxx_xxxxxxxx`                   | ne-imm16                  |      |      | ui   | u16  | ui  |     | `a != x`                              |
+| `10000100_xxxxxxxx_xxxxxxxx`                   | le-ui-imm16               |      |      | ui   | u16  | ui  |     | `a <= x`                              |
+| `10000101_xxxxxxxx_xxxxxxxx`                   | le-si-imm16               |      |      | si   | s16  | ui  |     | `a <= x`                              |
+| `10000110_xxxxxxxx_xxxxxxxx`                   | gt-ui-imm16               |      |      | ui   | u16  | ui  |     | `a >  x`                              |
+| `10000111_xxxxxxxx_xxxxxxxx`                   | gt-si-imm16               |      |      | si   | s16  | ui  |     | `a >  x`                              |
+| `10001000_xxxxxxxx_xxxxxxxx`                   | lt-ui-imm16               |      |      | ui   | u16  | ui  |     | `a <  x`                              |
+| `10001001_xxxxxxxx_xxxxxxxx`                   | lt-si-imm16               |      |      | si   | s16  | ui  |     | `a <  x`                              |
+| `10001010_xxxxxxxx_xxxxxxxx`                   | ge-ui-imm16               |      |      | ui   | u16  | ui  |     | `a >= x`                              |
+| `10001011_xxxxxxxx_xxxxxxxx`                   | ge-si-imm16               |      |      | si   | s16  | ui  |     | `a >= x`                              |
+| `10001100_xxxxxxxx_xxxxxxxx`                   | and-imm16                 |      |      | ui   | u16  | ui  |     | `a &  x`                              |
+| `10001101_xxxxxxxx_xxxxxxxx`                   | or--imm16                 |      |      | ui   | u16  | ui  |     | `a \| x`                              |
+| `10001110_xxxxxxxx_xxxxxxxx`                   | xor-imm16                 |      |      | ui   | u16  | ui  |     | `a ^  x`                              |
+| `10001111_xxxxxxxx_xxxxxxxx`                   | add-imm16                 |      |      | ui   | u16  | ui  |     | `a +  x`                              |
+| `10010000_xxxxxxxx_xxxxxxxx`                   | sub-imm16                 |      |      | ui   | u16  | ui  |     | `a -  x`                              |
+| `10010001_xxxxxxxx_xxxxxxxx`                   | mul-imm16                 |      |      | ui   | u16  | ui  |     | `a *  x`                              |
+| `10010010_xxxxxxxx_xxxxxxxx`                   | ld-u8-imm16               |      |      |      | dptr | u8  |     | `*( u8*)(&data[x])`                   |
+| `10010011_xxxxxxxx_xxxxxxxx`                   | ld-u16-imm16              |      |      |      | dptr | u16 |     | `*(u16*)(&data[x])`                   |
+| `10010100_xxxxxxxx_xxxxxxxx`                   | ld-u32-imm16              |      |      |      | dptr | u32 |     | `*(u32*)(&data[x])`                   |
+| `10010101_xxxxxxxx_xxxxxxxx`                   | ld-u8--offs-imm16         |      |      | ui   | dptr | u8  |     | `*( u8*)(&data[x+a])`                 |
+| `10010110_xxxxxxxx_xxxxxxxx`                   | ld-u16-offs-imm16         |      |      | ui   | dptr | u16 |     | `*(u16*)(&data[x+a])`                 |
+| `10010111_xxxxxxxx_xxxxxxxx`                   | ld-u32-offs-imm16         |      |      | ui   | dptr | u32 |     | `*(u32*)(&data[x+a])`                 |
+| `10011000_xxxxxxxx_xxxxxxxx`                   | ld-s8-imm16               |      |      |      | dptr | s8  |     | `*( s8*)(&data[x])`                   |
+| `10011001_xxxxxxxx_xxxxxxxx`                   | ld-s16-imm16              |      |      |      | dptr | s16 |     | `*(s16*)(&data[x])`                   |
+| `10011010_xxxxxxxx_xxxxxxxx`                   | ld-s8--offs-imm16         |      |      | ui   | dptr | s8  |     | `*( s8*)(&data[x+a])`                 |
+| `10011011_xxxxxxxx_xxxxxxxx`                   | ld-s16-offs-imm16         |      |      | ui   | dptr | s16 |     | `*(s16*)(&data[x+a])`                 |
+| `10011100_xxxxxxxx_xxxxxxxx`                   | st-u8-imm16               |      |      | u8   | dptr | u8  |     | `*( u8*)(&data[x]) = a`               |
+| `10011101_xxxxxxxx_xxxxxxxx`                   | st-u16-imm16              |      |      | u16  | dptr | u16 |     | `*(u16*)(&data[x]) = a`               |
+| `10011110_xxxxxxxx_xxxxxxxx`                   | st-u32-imm16              |      |      | u32  | dptr | u32 |     | `*(u32*)(&data[x]) = a`               |
+| `10011111_xxxxxxxx_xxxxxxxx`                   | st-u8--offs-imm16         |      | u8   | ui   | dptr | u8  |     | `*( u8*)(&data[x+a]) = b`             |
+| `10100000_xxxxxxxx_xxxxxxxx`                   | st-u16-offs-imm16         |      | u16  | ui   | dptr | u16 |     | `*(u16*)(&data[x+a]) = b`             |
+| `10100001_xxxxxxxx_xxxxxxxx`                   | st-u32-offs-imm16         |      | u32  | ui   | dptr | u32 |     | `*(u32*)(&data[x+a]) = b`             |
+| `10100010_xxxxxxxx_xxxxxxxx`                   | st-u8--discard-imm16      |      |      | u8   | dptr |     |     | `*( u8*)(&data[x]) = a`               |
+| `10100011_xxxxxxxx_xxxxxxxx`                   | st-u16-discard-imm16      |      |      | u16  | dptr |     |     | `*(u16*)(&data[x]) = a`               |
+| `10100100_xxxxxxxx_xxxxxxxx`                   | st-u32-discard-imm16      |      |      | u32  | dptr |     |     | `*(u32*)(&data[x]) = a`               |
+| `10100101_xxxxxxxx_xxxxxxxx`                   | st-u8--offs-discard-imm16 |      | u8   | ui   | dptr |     |     | `*( u8*)(&data[x+a]) = b`             |
+| `10100110_xxxxxxxx_xxxxxxxx`                   | st-u16-offs-discard-imm16 |      | u16  | ui   | dptr |     |     | `*(u16*)(&data[x+a]) = b`             |
+| `10100111_xxxxxxxx_xxxxxxxx`                   | st-u32-offs-discard-imm16 |      | u32  | ui   | dptr |     |     | `*(u32*)(&data[x+a]) = b`             |
+| `10101000_xxxxxxxx_xxxxxxxx`                   | call-imm16                |      |      |      | mptr |     |     | `cpush(IP); IP=x`                     |
+| `10101001_xxxxxxxx_xxxxxxxx`                   | jump-abs-imm16            |      |      |      | mptr |     |     | `IP=x`                                |
+| `10101010_xxxxxxxx_xxxxxxxx`                   | jump-abs-if-imm16         |      |      | ui   | mptr |     |     | `IP=x if a != 0`                      |
+| `10101011_xxxxxxxx_xxxxxxxx`                   | jump-abs-if-not-imm16     |      |      | ui   | mptr |     |     | `IP=x if a == 0`                      |
+| `10101100_xxxxxxxx_xxxxxxxx`                   | jump-rel-imm16            |      |      |      | s16  |     |     | `IP+=(s16)x`                          |
+| `10101101_xxxxxxxx_xxxxxxxx`                   | jump-rel-if-imm16         |      |      | ui   | s16  |     |     | `IP+=(s16)x if a != 0`                |
+| `10101110_xxxxxxxx_xxxxxxxx`                   | jump-rel-if-not-imm16     |      |      | ui   | s16  |     |     | `IP+=(s16)x if a == 0`                |
+| `10101111_xxxxxxxx_xxxxxxxx`                   | syscall-imm16             |      |      |      | u16  |     |     | invoke system function `x`            |
+| `10110000_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10110001_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10110010_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10110011_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10110100_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10110101_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10110110_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10110111_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10111000_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10111001_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10111010_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10111011_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10111100_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10111101_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10111110_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `10111111_xxxxxxxx_xxxxxxxx`                   | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11000000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | push-u32                  |      |      |      | u32  | u32 |     | push (u32)x                           |
+| `11000001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | push-s32                  |      |      |      | s32  | s32 |     | push (s32)x                           |
+| `11000010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | eq-imm32                  |      |      | ui   | u32  | ui  |     | `a == x`                              |
+| `11000011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ne-imm32                  |      |      | ui   | u32  | ui  |     | `a != x`                              |
+| `11000100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | le-ui-imm32               |      |      | ui   | u32  | ui  |     | `a <= x`                              |
+| `11000101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | le-si-imm32               |      |      | si   | s32  | ui  |     | `a <= x`                              |
+| `11000110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | gt-ui-imm32               |      |      | ui   | u32  | ui  |     | `a >  x`                              |
+| `11000111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | gt-si-imm32               |      |      | si   | s32  | ui  |     | `a >  x`                              |
+| `11001000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | lt-ui-imm32               |      |      | ui   | u32  | ui  |     | `a <  x`                              |
+| `11001001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | lt-si-imm32               |      |      | si   | s32  | ui  |     | `a <  x`                              |
+| `11001010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ge-ui-imm32               |      |      | ui   | u32  | ui  |     | `a >= x`                              |
+| `11001011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ge-si-imm32               |      |      | si   | s32  | ui  |     | `a >= x`                              |
+| `11001100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | and-imm32                 |      |      | ui   | u32  | ui  |     | `a &  x`                              |
+| `11001101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | or--imm32                 |      |      | ui   | u32  | ui  |     | `a \| x`                              |
+| `11001110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | xor-imm32                 |      |      | ui   | u32  | ui  |     | `a ^  x`                              |
+| `11001111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | add-imm32                 |      |      | ui   | u32  | ui  |     | `a +  x`                              |
+| `11010000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | sub-imm32                 |      |      | ui   | u32  | ui  |     | `a -  x`                              |
+| `11010001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | mul-imm32                 |      |      | ui   | u32  | ui  |     | `a *  x`                              |
+| `11010010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-u8-imm32               |      |      |      | dptr | u8  |     | `*( u8*)(&data[x])`                   |
+| `11010011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-u16-imm32              |      |      |      | dptr | u16 |     | `*(u16*)(&data[x])`                   |
+| `11010100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-u32-imm32              |      |      |      | dptr | u32 |     | `*(u32*)(&data[x])`                   |
+| `11010101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-u8--offs-imm32         |      |      | ui   | dptr | u8  |     | `*( u8*)(&data[x+a])`                 |
+| `11010110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-u16-offs-imm32         |      |      | ui   | dptr | u16 |     | `*(u16*)(&data[x+a])`                 |
+| `11010111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-u32-offs-imm32         |      |      | ui   | dptr | u32 |     | `*(u32*)(&data[x+a])`                 |
+| `11011000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-s8-imm32               |      |      |      | dptr | s8  |     | `*( s8*)(&data[x])`                   |
+| `11011001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-s16-imm32              |      |      |      | dptr | s16 |     | `*(s16*)(&data[x])`                   |
+| `11011010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-s8--offs-imm32         |      |      | ui   | dptr | s8  |     | `*( s8*)(&data[x+a])`                 |
+| `11011011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | ld-s16-offs-imm32         |      |      | ui   | dptr | s16 |     | `*(s16*)(&data[x+a])`                 |
+| `11011100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u8-imm32               |      |      | u8   | dptr | u8  |     | `*( u8*)(&data[x]) = a`               |
+| `11011101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u16-imm32              |      |      | u16  | dptr | u16 |     | `*(u16*)(&data[x]) = a`               |
+| `11011110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u32-imm32              |      |      | u32  | dptr | u32 |     | `*(u32*)(&data[x]) = a`               |
+| `11011111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u8--offs-imm32         |      | u8   | ui   | dptr | u8  |     | `*( u8*)(&data[x+a]) = b`             |
+| `11100000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u16-offs-imm32         |      | u16  | ui   | dptr | u16 |     | `*(u16*)(&data[x+a]) = b`             |
+| `11100001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u32-offs-imm32         |      | u32  | ui   | dptr | u32 |     | `*(u32*)(&data[x+a]) = b`             |
+| `11100010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u8--discard-imm32      |      |      | u8   | dptr |     |     | `*( u8*)(&data[x]) = a`               |
+| `11100011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u16-discard-imm32      |      |      | u16  | dptr |     |     | `*(u16*)(&data[x]) = a`               |
+| `11100100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u32-discard-imm32      |      |      | u32  | dptr |     |     | `*(u32*)(&data[x]) = a`               |
+| `11100101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u8--offs-discard-imm32 |      | u8   | ui   | dptr |     |     | `*( u8*)(&data[x+a]) = b`             |
+| `11100110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u16-offs-discard-imm32 |      | u16  | ui   | dptr |     |     | `*(u16*)(&data[x+a]) = b`             |
+| `11100111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | st-u32-offs-discard-imm32 |      | u32  | ui   | dptr |     |     | `*(u32*)(&data[x+a]) = b`             |
+| `11101000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | call-imm32                |      |      |      | mptr |     |     | `cpush(IP); IP=x`                     |
+| `11101001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | jump-abs-imm32            |      |      |      | mptr |     |     | `IP=x`                                |
+| `11101010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | jump-abs-if-imm32         |      |      | ui   | mptr |     |     | `IP=x if a != 0`                      |
+| `11101011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | jump-abs-if-not-imm32     |      |      | ui   | mptr |     |     | `IP=x if a == 0`                      |
+| `11101100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | jump-rel-imm32            |      |      |      | s32  |     |     | `IP+=(s32)x`                          |
+| `11101101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | jump-rel-if-imm32         |      |      | ui   | s32  |     |     | `IP+=(s32)x if a != 0`                |
+| `11101110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | jump-rel-if-not-imm32     |      |      | ui   | s32  |     |     | `IP+=(s32)x if a == 0`                |
+| `11101111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | syscall-imm32             |      |      |      | u32  |     |     | invoke system function `x`            |
+| `11110000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11110001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11110010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11110011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11110100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11110101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11110110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11110111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11111000_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11111001_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11111010_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11111011_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11111100_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11111101_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11111110_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
+| `11111111_xxxxxxxx_xxxxxxxx_xxxxxxxx_xxxxxxxx` | **RESERVED**              |      |      |      |      |     |     |                                       |
 
 ## Standard Function Library
 |   Code | Name          | Arg1 | Arg2 | Arg3  | Result    | Description                                 |
