@@ -129,35 +129,40 @@ void automate_test_ui(
         uint32_t b = b_min;
         do {
             struct test_t t = {0};
-            uint8_t* p = &t.prgm[0];
+            uint8_t* p;
             uint32_t result = rexlang_pure_eval(opcode, a, b);
 
-            { // stack-only opcode test:
-                push_ui(&p, a);
-                push_ui(&p, b);
-
-                *p++ = opcode;
-                t.check_stack_values[t.check_stack_count++] = result;
-            }
-
-            if (b <= UINT8_MAX) { // imm8 opcode test:
-                push_ui(&p, a);
-
-                *p++ = opcode + 0x40;
-                *p++ = (uint8_t)b;
-
-                t.check_stack_values[t.check_stack_count++] = result;
-            }
-
-            // end with HALT:
-            *p++ = 0;
+            t.check_stack_values[t.check_stack_count++] = result;
             t.check_error = REXLANG_ERR_HALTED;
 
-            printf("executing test: (%08X %5s %08X) == %08X\n", a, name, b, result);
-            int ret = exec_test(&t, msg);
-            if (ret) {
-                printf("** test FAILED! (%d); %s\n", ret, msg);
-                return;
+            {
+                // stack-only opcode test:
+                p = &t.prgm[0];
+                push_ui(&p, a);
+                push_ui(&p, b);
+                *p++ = opcode;
+                *p++ = 0; // halt
+                printf("executing test: (%08X %5s %08X) == %08X\n", a, name, b, result);
+                int ret = exec_test(&t, msg);
+                if (ret) {
+                    printf("** test FAILED! (%d); %s\n", ret, msg);
+                    return;
+                }
+            }
+
+            if (b <= UINT8_MAX) {
+                // imm8 opcode test:
+                p = &t.prgm[0];
+                push_ui(&p, a);
+                *p++ = opcode + 0x40;
+                *p++ = (uint8_t)b;
+                *p++ = 0; // halt
+                printf("executing test: (%08X %5s-imm8 %08X) == %08X\n", a, name, b, result);
+                int ret = exec_test(&t, msg);
+                if (ret) {
+                    printf("** test FAILED! (%d); %s\n", ret, msg);
+                    return;
+                }
             }
         } while (b++ != b_max);
     } while (a++ != a_max);
@@ -178,37 +183,42 @@ void automate_test_si(
         int32_t b = b_min;
         do {
             struct test_t t = {0};
-            uint8_t *p = &t.prgm[0];
+            uint8_t *p;
             uint32_t result = rexlang_pure_eval(opcode, (uint32_t)a, (uint32_t)b);
+
+            t.check_stack_values[t.check_stack_count++] = result;
+            t.check_error = REXLANG_ERR_HALTED;
 
             {
                 // stack-only opcode test:
+                p = &t.prgm[0];
                 push_si(&p, a);
                 push_si(&p, b);
-
                 *p++ = opcode;
-                t.check_stack_values[t.check_stack_count++] = result;
+                // end with HALT:
+                *p++ = 0;
+                printf("executing test: (%08X %5s %08X) == %08X\n", a, name, b, result);
+                int ret = exec_test(&t, msg);
+                if (ret) {
+                    printf("** test FAILED! (%d); %s\n", ret, msg);
+                    return;
+                }
             }
 
             if (b >= INT8_MIN && b <= INT8_MAX) {
                 // imm8 opcode test:
+                p = &t.prgm[0];
                 push_si(&p, a);
-
                 *p++ = opcode + 0x40;
                 *p++ = (uint8_t)b;
-
-                t.check_stack_values[t.check_stack_count++] = result;
-            }
-
-            // end with HALT:
-            *p++ = 0;
-            t.check_error = REXLANG_ERR_HALTED;
-
-            printf("executing test: (%08X %5s %08X) == %08X\n", a, name, b, result);
-            int ret = exec_test(&t, msg);
-            if (ret) {
-                printf("** test FAILED! (%d); %s\n", ret, msg);
-                return;
+                // end with HALT:
+                *p++ = 0;
+                printf("executing test: (%08X %5s-imm8 %08X) == %08X\n", a, name, b, result);
+                int ret = exec_test(&t, msg);
+                if (ret) {
+                    printf("** test FAILED! (%d); %s\n", ret, msg);
+                    return;
+                }
             }
         } while (b++ != b_max);
     } while (a++ != a_max);
@@ -219,6 +229,7 @@ int main(void) {
 
     // automated tests:
     automate_test_ui("eq",    0x02,  127,  129,  127,  129);
+
     automate_test_ui("ne",    0x03,  127,  129,  127,  129);
 
     automate_test_ui("le-ui", 0x04,  127,  129,  127,  129);
@@ -242,7 +253,7 @@ int main(void) {
     automate_test_si("gt-si", 0x07,   -1,    1,   -1,    1);
 
 
-#if 0
+#if 1
     for (int i = 0; i < sizeof(tests)/sizeof(struct test_t); i++) {
         printf("executing test: %s\n", tests[i].name);
         int ret = exec_test(&tests[i], msg);
