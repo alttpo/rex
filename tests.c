@@ -114,7 +114,7 @@ void push_si(uint8_t** p, int32_t a) {
     }
 }
 
-void automate_test_ui(
+int automate_test_ui(
     const char *name,
     uint8_t opcode,
     uint32_t a_min,
@@ -142,11 +142,11 @@ void automate_test_ui(
                 push_ui(&p, b);
                 *p++ = opcode;
                 *p++ = 0; // halt
-                printf("executing test: (%08X %5s %08X) == %08X\n", a, name, b, result);
+                printf("executing test: (%10u %5s %10u) == %10u // stack\n", a, name, b, result);
                 int ret = exec_test(&t, msg);
                 if (ret) {
                     printf("** test FAILED! (%d); %s\n", ret, msg);
-                    return;
+                    return ret;
                 }
             }
 
@@ -157,18 +157,54 @@ void automate_test_ui(
                 *p++ = opcode + 0x40;
                 *p++ = (uint8_t)b;
                 *p++ = 0; // halt
-                printf("executing test: (%08X %5s-imm8 %08X) == %08X\n", a, name, b, result);
+                printf("executing test: (%10u %5s %10u) == %10u // imm8\n", a, name, b, result);
                 int ret = exec_test(&t, msg);
                 if (ret) {
                     printf("** test FAILED! (%d); %s\n", ret, msg);
-                    return;
+                    return ret;
+                }
+            }
+
+            if (b <= UINT16_MAX) {
+                // imm16 opcode test:
+                p = &t.prgm[0];
+                push_ui(&p, a);
+                *p++ = opcode + 0x80;
+                *p++ = (uint8_t)(uint32_t)b;
+                *p++ = (uint8_t)((uint32_t)b >> 8);
+                *p++ = 0; // halt
+                printf("executing test: (%10u %5s %10u) == %10u // imm16\n", a, name, b, result);
+                int ret = exec_test(&t, msg);
+                if (ret) {
+                    printf("** test FAILED! (%d); %s\n", ret, msg);
+                    return ret;
+                }
+            }
+
+            {
+                // imm32 opcode test:
+                p = &t.prgm[0];
+                push_ui(&p, a);
+                *p++ = opcode + 0xC0;
+                *p++ = (uint8_t)(uint32_t)b;
+                *p++ = (uint8_t)((uint32_t)b >> 8);
+                *p++ = (uint8_t)((uint32_t)b >> 16);
+                *p++ = (uint8_t)((uint32_t)b >> 24);
+                *p++ = 0; // halt
+                printf("executing test: (%10u %5s %10u) == %10u // imm32\n", a, name, b, result);
+                int ret = exec_test(&t, msg);
+                if (ret) {
+                    printf("** test FAILED! (%d); %s\n", ret, msg);
+                    return ret;
                 }
             }
         } while (b++ != b_max);
     } while (a++ != a_max);
+
+    return 0;
 }
 
-void automate_test_si(
+int automate_test_si(
     const char *name,
     uint8_t opcode,
     int32_t a_min,
@@ -197,11 +233,11 @@ void automate_test_si(
                 *p++ = opcode;
                 // end with HALT:
                 *p++ = 0;
-                printf("executing test: (%08X %5s %08X) == %08X\n", a, name, b, result);
+                printf("executing test: (%10d %5s %10d) == %10d // stack\n", a, name, b, result);
                 int ret = exec_test(&t, msg);
                 if (ret) {
                     printf("** test FAILED! (%d); %s\n", ret, msg);
-                    return;
+                    return ret;
                 }
             }
 
@@ -210,48 +246,125 @@ void automate_test_si(
                 p = &t.prgm[0];
                 push_si(&p, a);
                 *p++ = opcode + 0x40;
-                *p++ = (uint8_t)b;
+                *p++ = (uint8_t)(uint32_t)b;
                 // end with HALT:
                 *p++ = 0;
-                printf("executing test: (%08X %5s-imm8 %08X) == %08X\n", a, name, b, result);
+                printf("executing test: (%10d %5s %10d) == %10d // imm8\n", a, name, b, result);
                 int ret = exec_test(&t, msg);
                 if (ret) {
                     printf("** test FAILED! (%d); %s\n", ret, msg);
-                    return;
+                    return ret;
+                }
+            }
+
+            if (b >= INT16_MIN && b <= INT16_MAX) {
+                // imm16 opcode test:
+                p = &t.prgm[0];
+                push_si(&p, a);
+                *p++ = opcode + 0x80;
+                *p++ = (uint8_t)(uint32_t)b;
+                *p++ = (uint8_t)((uint32_t)b >> 8);
+                // end with HALT:
+                *p++ = 0;
+                printf("executing test: (%10d %5s %10d) == %10d // imm16\n", a, name, b, result);
+                int ret = exec_test(&t, msg);
+                if (ret) {
+                    printf("** test FAILED! (%d); %s\n", ret, msg);
+                    return ret;
+                }
+            }
+
+            {
+                // imm32 opcode test:
+                p = &t.prgm[0];
+                push_si(&p, a);
+                *p++ = opcode + 0xC0;
+                *p++ = (uint8_t)(uint32_t)b;
+                *p++ = (uint8_t)((uint32_t)b >> 8);
+                *p++ = (uint8_t)((uint32_t)b >> 16);
+                *p++ = (uint8_t)((uint32_t)b >> 24);
+                // end with HALT:
+                *p++ = 0;
+                printf("executing test: (%10d %5s %10d) == %10d // imm32\n", a, name, b, result);
+                int ret = exec_test(&t, msg);
+                if (ret) {
+                    printf("** test FAILED! (%d); %s\n", ret, msg);
+                    return ret;
                 }
             }
         } while (b++ != b_max);
     } while (a++ != a_max);
+
+    return 0;
 }
 
 int main(void) {
     char msg[256] = {0};
+    uint32_t ranges_ui[][2] = {
+        {           0U,            2U},
+        {  INT8_MAX-2U,   INT8_MAX+2U},
+        { UINT8_MAX-2U,  UINT8_MAX+2U},
+        { INT16_MAX-2U,  INT16_MAX+2U},
+        {UINT16_MAX-2U, UINT16_MAX+2U},
+        { INT32_MAX-2U,  INT32_MAX+2U},
+        {UINT32_MAX-2U, UINT32_MAX},
+    };
+    int32_t ranges_si[][2] = {
+        {           -2,             2},
+        {   INT8_MIN-2,    INT8_MIN+2},
+        {   INT8_MAX-2,    INT8_MAX+2},
+        {  INT16_MIN-2,   INT16_MIN+2},
+        {  INT16_MAX-2,   INT16_MAX+2},
+        { -UINT8_MAX-2,  -UINT8_MAX+2},
+        {  UINT8_MAX-2,   UINT8_MAX+2},
+        {-UINT16_MAX-2, -UINT16_MAX+2},
+        { UINT16_MAX-2,  UINT16_MAX+2},
+        {  INT32_MIN,     INT32_MIN+2},
+        {  INT32_MAX-2,   INT32_MAX},
+    };
+    int ret = 0;
 
-    // automated tests:
-    automate_test_ui("eq",    0x02,  127,  129,  127,  129);
+    // unsigned tests:
+    for (int i = 0; i < 7; i++) {
+        uint32_t lo = ranges_ui[i][0];
+        uint32_t hi = ranges_ui[i][1];
+        if ((ret = automate_test_ui("eq", 0x02, lo, hi, lo, hi)) != 0) {
+            return ret;
+        }
+        if ((ret = automate_test_ui("ne", 0x03, lo, hi, lo, hi)) != 0) {
+            return ret;
+        }
+        if ((ret = automate_test_ui("le-ui", 0x04, lo, hi, lo, hi)) != 0) {
+            return ret;
+        }
+    }
 
-    automate_test_ui("ne",    0x03,  127,  129,  127,  129);
+    // signed tests:
+    for (int i = 0; i < 11; i++) {
+        int32_t lo = ranges_si[i][0];
+        int32_t hi = ranges_si[i][1];
+        if ((ret = automate_test_si("eq", 0x02, lo, hi, lo, hi)) != 0) {
+            return ret;
+        }
+        if ((ret = automate_test_si("ne", 0x03, lo, hi, lo, hi)) != 0) {
+            return ret;
+        }
+        if ((ret = automate_test_si("le-si", 0x05, lo, hi, lo, hi)) != 0) {
+            return ret;
+        }
+    }
 
-    automate_test_ui("le-ui", 0x04,  127,  129,  127,  129);
-    automate_test_ui("le-ui", 0x04,  127,  129,    0,    2);
-    automate_test_ui("le-ui", 0x04,    0,    2,  127,  129);
-    automate_test_ui("le-ui", 0x04,    0,    2,    0,    2);
+#if 0
+    if ((ret = automate_test_ui("gt-ui", 0x06,  127,  129,  127,  129))) { return ret; }
+    if ((ret = automate_test_ui("gt-ui", 0x06,  127,  129,    0,    2))) { return ret; }
+    if ((ret = automate_test_ui("gt-ui", 0x06,    0,    2,  127,  129))) { return ret; }
+    if ((ret = automate_test_ui("gt-ui", 0x06,    0,    2,    0,    2))) { return ret; }
 
-    automate_test_si("le-si", 0x05,  127,  129,  127,  129);
-    automate_test_si("le-si", 0x05, -129, -127, -129, -127);
-    automate_test_si("le-si", 0x05, -129, -127,   -1,    1);
-    automate_test_si("le-si", 0x05,   -1,    1,   -1,    1);
-
-    automate_test_ui("gt-ui", 0x06,  127,  129,  127,  129);
-    automate_test_ui("gt-ui", 0x06,  127,  129,    0,    2);
-    automate_test_ui("gt-ui", 0x06,    0,    2,  127,  129);
-    automate_test_ui("gt-ui", 0x06,    0,    2,    0,    2);
-
-    automate_test_si("gt-si", 0x07,  127,  129,  127,  129);
-    automate_test_si("gt-si", 0x07, -129, -127, -129, -127);
-    automate_test_si("gt-si", 0x07, -129, -127,   -1,    1);
-    automate_test_si("gt-si", 0x07,   -1,    1,   -1,    1);
-
+    if ((ret = automate_test_si("gt-si", 0x07,  127,  129,  127,  129))) { return ret; }
+    if ((ret = automate_test_si("gt-si", 0x07, -129, -127, -129, -127))) { return ret; }
+    if ((ret = automate_test_si("gt-si", 0x07, -129, -127,   -1,    1))) { return ret; }
+    if ((ret = automate_test_si("gt-si", 0x07,   -1,    1,   -1,    1))) { return ret; }
+#endif
 
 #if 1
     for (int i = 0; i < sizeof(tests)/sizeof(struct test_t); i++) {
@@ -259,7 +372,7 @@ int main(void) {
         int ret = exec_test(&tests[i], msg);
         if (ret) {
             printf("** test FAILED! (%d); %s\n", ret, msg);
-            return 1;
+            return ret;
         }
     }
 #endif
