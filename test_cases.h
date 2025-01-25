@@ -531,7 +531,34 @@ const struct test_t tests[] = {
         },
         NULL,
     },
-
+    {
+        "gt-ui-imm32 false",
+        {
+            0b11000001, 0xFE, 0xFF, 0xFF, 0xFF,     // push-s32
+            0xC6, 0xFF, 0xFF, 0xFF, 0xFF,           // gt-ui-imm32
+            0,                                      // halt
+        },
+        REXLANG_ERR_HALTED,
+        1,
+        {
+            0
+        },
+        NULL,
+    },
+    {
+        "gt-ui-imm32 true",
+        {
+            0b11000001, 0xFF, 0xFF, 0xFF, 0xFF,     // push-s32
+            0xC6, 0xFE, 0xFF, 0xFF, 0xFF,           // gt-ui-imm32
+            0,                                      // halt
+        },
+        REXLANG_ERR_HALTED,
+        1,
+        {
+            1
+        },
+        NULL,
+    },
     {
         "chip-set-addr",
         {

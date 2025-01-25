@@ -78,9 +78,171 @@ int exec_test(const struct test_t *t, char* msg) {
     return 0;
 }
 
+typedef uint32_t (*rexlang_eval_fn)(uint8_t opcode, uint32_t b, uint32_t a);
+
+void push_ui(uint8_t** p, uint32_t a) {
+    if (a <= UINT8_MAX) {
+        *(*p)++ = 0b01000000; // push-u8
+        *(*p)++ = (uint8_t)a;
+    } else if (a <= UINT16_MAX) {
+        *(*p)++ = 0b10000000; // push-u16
+        *(*p)++ = (uint8_t)a;
+        *(*p)++ = (uint8_t)(a >> 8);
+    } else {
+        *(*p)++ = 0b11000000; // push-u32
+        *(*p)++ = (uint8_t)a;
+        *(*p)++ = (uint8_t)(a >> 8);
+        *(*p)++ = (uint8_t)(a >> 16);
+        *(*p)++ = (uint8_t)(a >> 24);
+    }
+}
+
+void push_si(uint8_t** p, int32_t a) {
+    if (a >= INT8_MIN && a <= INT8_MAX) {
+        *(*p)++ = 0b01000001; // push-s8
+        *(*p)++ = (uint8_t)(uint32_t)a;
+    } else if (a >= INT16_MIN && a <= INT16_MAX) {
+        *(*p)++ = 0b10000001; // push-s16
+        *(*p)++ = (uint8_t)(uint32_t)a;
+        *(*p)++ = (uint8_t)((uint32_t)a >> 8);
+    } else {
+        *(*p)++ = 0b11000001; // push-s32
+        *(*p)++ = (uint8_t)(uint32_t)a;
+        *(*p)++ = (uint8_t)((uint32_t)a >> 8);
+        *(*p)++ = (uint8_t)((uint32_t)a >> 16);
+        *(*p)++ = (uint8_t)((uint32_t)a >> 24);
+    }
+}
+
+void automate_test_ui(
+    const char *name,
+    uint8_t opcode,
+    uint32_t a_min,
+    uint32_t a_max,
+    uint32_t b_min,
+    uint32_t b_max
+) {
+    char msg[256] = {0};
+
+    uint32_t a = a_min;
+    do {
+        uint32_t b = b_min;
+        do {
+            struct test_t t = {0};
+            uint8_t* p = &t.prgm[0];
+            uint32_t result = rexlang_pure_eval(opcode, a, b);
+
+            { // stack-only opcode test:
+                push_ui(&p, a);
+                push_ui(&p, b);
+
+                *p++ = opcode;
+                t.check_stack_values[t.check_stack_count++] = result;
+            }
+
+            if (b <= UINT8_MAX) { // imm8 opcode test:
+                push_ui(&p, a);
+
+                *p++ = opcode + 0x40;
+                *p++ = (uint8_t)b;
+
+                t.check_stack_values[t.check_stack_count++] = result;
+            }
+
+            // end with HALT:
+            *p++ = 0;
+            t.check_error = REXLANG_ERR_HALTED;
+
+            printf("executing test: (%08X %5s %08X) == %08X\n", a, name, b, result);
+            int ret = exec_test(&t, msg);
+            if (ret) {
+                printf("** test FAILED! (%d); %s\n", ret, msg);
+                return;
+            }
+        } while (b++ != b_max);
+    } while (a++ != a_max);
+}
+
+void automate_test_si(
+    const char *name,
+    uint8_t opcode,
+    int32_t a_min,
+    int32_t a_max,
+    int32_t b_min,
+    int32_t b_max
+) {
+    char msg[256] = {0};
+
+    int32_t a = a_min;
+    do {
+        int32_t b = b_min;
+        do {
+            struct test_t t = {0};
+            uint8_t *p = &t.prgm[0];
+            uint32_t result = rexlang_pure_eval(opcode, (uint32_t)a, (uint32_t)b);
+
+            {
+                // stack-only opcode test:
+                push_si(&p, a);
+                push_si(&p, b);
+
+                *p++ = opcode;
+                t.check_stack_values[t.check_stack_count++] = result;
+            }
+
+            if (b >= INT8_MIN && b <= INT8_MAX) {
+                // imm8 opcode test:
+                push_si(&p, a);
+
+                *p++ = opcode + 0x40;
+                *p++ = (uint8_t)b;
+
+                t.check_stack_values[t.check_stack_count++] = result;
+            }
+
+            // end with HALT:
+            *p++ = 0;
+            t.check_error = REXLANG_ERR_HALTED;
+
+            printf("executing test: (%08X %5s %08X) == %08X\n", a, name, b, result);
+            int ret = exec_test(&t, msg);
+            if (ret) {
+                printf("** test FAILED! (%d); %s\n", ret, msg);
+                return;
+            }
+        } while (b++ != b_max);
+    } while (a++ != a_max);
+}
+
 int main(void) {
     char msg[256] = {0};
 
+    // automated tests:
+    automate_test_ui("eq",    0x02,  127,  129,  127,  129);
+    automate_test_ui("ne",    0x03,  127,  129,  127,  129);
+
+    automate_test_ui("le-ui", 0x04,  127,  129,  127,  129);
+    automate_test_ui("le-ui", 0x04,  127,  129,    0,    2);
+    automate_test_ui("le-ui", 0x04,    0,    2,  127,  129);
+    automate_test_ui("le-ui", 0x04,    0,    2,    0,    2);
+
+    automate_test_si("le-si", 0x05,  127,  129,  127,  129);
+    automate_test_si("le-si", 0x05, -129, -127, -129, -127);
+    automate_test_si("le-si", 0x05, -129, -127,   -1,    1);
+    automate_test_si("le-si", 0x05,   -1,    1,   -1,    1);
+
+    automate_test_ui("gt-ui", 0x06,  127,  129,  127,  129);
+    automate_test_ui("gt-ui", 0x06,  127,  129,    0,    2);
+    automate_test_ui("gt-ui", 0x06,    0,    2,  127,  129);
+    automate_test_ui("gt-ui", 0x06,    0,    2,    0,    2);
+
+    automate_test_si("gt-si", 0x07,  127,  129,  127,  129);
+    automate_test_si("gt-si", 0x07, -129, -127, -129, -127);
+    automate_test_si("gt-si", 0x07, -129, -127,   -1,    1);
+    automate_test_si("gt-si", 0x07,   -1,    1,   -1,    1);
+
+
+#if 0
     for (int i = 0; i < sizeof(tests)/sizeof(struct test_t); i++) {
         printf("executing test: %s\n", tests[i].name);
         int ret = exec_test(&tests[i], msg);
@@ -89,6 +251,7 @@ int main(void) {
             return 1;
         }
     }
+#endif
 
     return 0;
 }

@@ -139,3 +139,43 @@ static inline u32 pop(struct rexlang_vm *vm)
 	// read the value from the stack and move the sp:
 	return vm->ki[vm->sp++];
 }
+
+static u32 rexlang_pure_eval(u8 op, u32 l, u32 r)
+{
+	switch (op) {
+		case 0x02: // eq
+			return (l == r);
+		case 0x03: // ne
+			return (l != r);
+		case 0x04: // le-ui
+			return (l <= r);
+		case 0x05: // le-si
+			return ((s32)l <= (s32)r);
+		case 0x06: // gt-ui
+			return (l > r);
+		case 0x07: // gt-si
+			return ((s32)l > (s32)r);
+		case 0x08: // lt-ui
+			return (l < r);
+		case 0x09: // lt-si
+			return ((s32)l < (s32)r);
+		case 0x0A: // ge-ui
+			return (l >= r);
+		case 0x0B: // ge-si
+			return ((s32)l >= (s32)r);
+		case 0x0C: // and
+			return (l & r);
+		case 0x0D: // or
+			return (l | r);
+		case 0x0E: // xor
+			return (l ^ r);
+		case 0x0F: // add
+			return (l + r);
+		case 0x10: // sub
+			return (l - r);
+		case 0x11: // mul
+			return (l * r);
+		default:
+			return UINT32_MAX;
+	}
+}
