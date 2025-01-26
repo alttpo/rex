@@ -298,7 +298,10 @@ int automate_test_si(
     return 0;
 }
 
+struct named_op { const char *name; uint8_t op; };
+
 int main(void) {
+    int ret = 0;
     char msg[256] = {0};
     uint32_t ranges_ui[][2] = {
         {           0U,            2U},
@@ -322,49 +325,52 @@ int main(void) {
         {  INT32_MIN,     INT32_MIN+2},
         {  INT32_MAX-2,   INT32_MAX},
     };
-    int ret = 0;
 
-    // unsigned tests:
-    for (int i = 0; i < 7; i++) {
-        uint32_t lo = ranges_ui[i][0];
-        uint32_t hi = ranges_ui[i][1];
-        if ((ret = automate_test_ui("eq", 0x02, lo, hi, lo, hi)) != 0) {
-            return ret;
-        }
-        if ((ret = automate_test_ui("ne", 0x03, lo, hi, lo, hi)) != 0) {
-            return ret;
-        }
-        if ((ret = automate_test_ui("le-ui", 0x04, lo, hi, lo, hi)) != 0) {
-            return ret;
-        }
-    }
+    struct named_op opcodes_ui[] = {
+        {"eq",      0x02},
+        {"ne",      0x03},
+        {"le-ui",   0x04},
+        {"gt-ui",   0x06},
+        {"lt-ui",   0x08},
+        {"ge-ui",   0x0A},
+        {"and",     0x0C},
+        {"or",      0x0D},
+        {"xor",     0x0E},
+        {"add",     0x0F},
+        {"sub",     0x10},
+        {"mul",     0x11},
+        {NULL, 0},
+    };
+    struct named_op opcodes_si[] = {
+        {"le-si", 0x05},
+        {"gt-si", 0x07},
+        {"lt-si", 0x09},
+        {"ge-si", 0x0B},
+        {NULL, 0},
+    };
+    struct named_op* p;
 
     // signed tests:
-    for (int i = 0; i < 11; i++) {
-        int32_t lo = ranges_si[i][0];
-        int32_t hi = ranges_si[i][1];
-        if ((ret = automate_test_si("eq", 0x02, lo, hi, lo, hi)) != 0) {
-            return ret;
-        }
-        if ((ret = automate_test_si("ne", 0x03, lo, hi, lo, hi)) != 0) {
-            return ret;
-        }
-        if ((ret = automate_test_si("le-si", 0x05, lo, hi, lo, hi)) != 0) {
-            return ret;
+    for (p = opcodes_si; p->name; p++) {
+        for (int i = 0; i < 11; i++) {
+            int32_t lo = ranges_si[i][0];
+            int32_t hi = ranges_si[i][1];
+            if ((ret = automate_test_si(p->name, p->op, lo, hi, lo, hi)) != 0) {
+                return ret;
+            }
         }
     }
 
-#if 0
-    if ((ret = automate_test_ui("gt-ui", 0x06,  127,  129,  127,  129))) { return ret; }
-    if ((ret = automate_test_ui("gt-ui", 0x06,  127,  129,    0,    2))) { return ret; }
-    if ((ret = automate_test_ui("gt-ui", 0x06,    0,    2,  127,  129))) { return ret; }
-    if ((ret = automate_test_ui("gt-ui", 0x06,    0,    2,    0,    2))) { return ret; }
-
-    if ((ret = automate_test_si("gt-si", 0x07,  127,  129,  127,  129))) { return ret; }
-    if ((ret = automate_test_si("gt-si", 0x07, -129, -127, -129, -127))) { return ret; }
-    if ((ret = automate_test_si("gt-si", 0x07, -129, -127,   -1,    1))) { return ret; }
-    if ((ret = automate_test_si("gt-si", 0x07,   -1,    1,   -1,    1))) { return ret; }
-#endif
+    // unsigned tests:
+    for (p = opcodes_ui; p->name; p++) {
+        for (int i = 0; i < 7; i++) {
+            uint32_t lo = ranges_ui[i][0];
+            uint32_t hi = ranges_ui[i][1];
+            if ((ret = automate_test_ui(p->name, p->op, lo, hi, lo, hi)) != 0) {
+                return ret;
+            }
+        }
+    }
 
 #if 1
     for (int i = 0; i < sizeof(tests)/sizeof(struct test_t); i++) {
