@@ -142,7 +142,7 @@ int automate_test_ui(
                 push_ui(&p, b);
                 *p++ = opcode;
                 *p++ = 0; // halt
-                printf("executing test: (%10u %5s %10u) == %10u // stack\n", a, name, b, result);
+                printf("executing test: (%11u %5s %11u) == %11u // stack\n", a, name, b, result);
                 int ret = exec_test(&t, msg);
                 if (ret) {
                     printf("** test FAILED! (%d); %s\n", ret, msg);
@@ -157,7 +157,7 @@ int automate_test_ui(
                 *p++ = opcode + 0x40;
                 *p++ = (uint8_t)b;
                 *p++ = 0; // halt
-                printf("executing test: (%10u %5s %10u) == %10u // imm8\n", a, name, b, result);
+                printf("executing test: (%11u %5s %11u) == %11u // imm8\n", a, name, b, result);
                 int ret = exec_test(&t, msg);
                 if (ret) {
                     printf("** test FAILED! (%d); %s\n", ret, msg);
@@ -173,7 +173,7 @@ int automate_test_ui(
                 *p++ = (uint8_t)(uint32_t)b;
                 *p++ = (uint8_t)((uint32_t)b >> 8);
                 *p++ = 0; // halt
-                printf("executing test: (%10u %5s %10u) == %10u // imm16\n", a, name, b, result);
+                printf("executing test: (%11u %5s %11u) == %11u // imm16\n", a, name, b, result);
                 int ret = exec_test(&t, msg);
                 if (ret) {
                     printf("** test FAILED! (%d); %s\n", ret, msg);
@@ -191,7 +191,7 @@ int automate_test_ui(
                 *p++ = (uint8_t)((uint32_t)b >> 16);
                 *p++ = (uint8_t)((uint32_t)b >> 24);
                 *p++ = 0; // halt
-                printf("executing test: (%10u %5s %10u) == %10u // imm32\n", a, name, b, result);
+                printf("executing test: (%11u %5s %11u) == %11u // imm32\n", a, name, b, result);
                 int ret = exec_test(&t, msg);
                 if (ret) {
                     printf("** test FAILED! (%d); %s\n", ret, msg);
@@ -233,7 +233,7 @@ int automate_test_si(
                 *p++ = opcode;
                 // end with HALT:
                 *p++ = 0;
-                printf("executing test: (%10d %5s %10d) == %10d // stack\n", a, name, b, result);
+                printf("executing test: (%11d %5s %11d) == %11d // stack\n", a, name, b, result);
                 int ret = exec_test(&t, msg);
                 if (ret) {
                     printf("** test FAILED! (%d); %s\n", ret, msg);
@@ -249,7 +249,7 @@ int automate_test_si(
                 *p++ = (uint8_t)(uint32_t)b;
                 // end with HALT:
                 *p++ = 0;
-                printf("executing test: (%10d %5s %10d) == %10d // imm8\n", a, name, b, result);
+                printf("executing test: (%11d %5s %11d) == %11d // imm8\n", a, name, b, result);
                 int ret = exec_test(&t, msg);
                 if (ret) {
                     printf("** test FAILED! (%d); %s\n", ret, msg);
@@ -266,7 +266,7 @@ int automate_test_si(
                 *p++ = (uint8_t)((uint32_t)b >> 8);
                 // end with HALT:
                 *p++ = 0;
-                printf("executing test: (%10d %5s %10d) == %10d // imm16\n", a, name, b, result);
+                printf("executing test: (%11d %5s %11d) == %11d // imm16\n", a, name, b, result);
                 int ret = exec_test(&t, msg);
                 if (ret) {
                     printf("** test FAILED! (%d); %s\n", ret, msg);
@@ -285,7 +285,7 @@ int automate_test_si(
                 *p++ = (uint8_t)((uint32_t)b >> 24);
                 // end with HALT:
                 *p++ = 0;
-                printf("executing test: (%10d %5s %10d) == %10d // imm32\n", a, name, b, result);
+                printf("executing test: (%11d %5s %11d) == %11d // imm32\n", a, name, b, result);
                 int ret = exec_test(&t, msg);
                 if (ret) {
                     printf("** test FAILED! (%d); %s\n", ret, msg);
