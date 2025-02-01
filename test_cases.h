@@ -81,15 +81,31 @@ const struct test_t tests[] = {
         "chip-set-addr",
         {
             0b01000000, 0x3F,                   // push-u8    chip=0x3F        (fxpak)
-            0b11000000, 0x00, 0x2C, 0x00, 0x00, // push-u32   addr=0x00002C00
+            0b10000000, 0x00, 0x2C,             // push-u16   addr=0x2C00
             0b01101111, 0x00,                   // syscall-u8 0 (chip-set-addr)
             0,                                  // halt
         },
         REXLANG_ERR_HALTED,
         0,
+        { 0 },
+        test_chip_set_addr,
+    },
+    {
+        "chip-rdn-u8",
         {
-            0,
+            0b01000000, 0x3F,                   // push-u8    chip=0x3F        (fxpak)
+            0b10000000, 0x00, 0x2C,             // push-u16   addr=0x2C00
+            0b01101111, 0x00,                   // syscall-u8 0 (chip-set-addr)
+
+            0b01000000, 0x3F,                   // push-u8    chip=0x3F        (fxpak)
+            0b01101111, 0x01,                   // syscall-u8 1 (chip-rdn-u8)
+            0b01101010, 7,                      // jump-abs-if-imm8 7
+
+            0,                                  // halt
         },
+        REXLANG_ERR_HALTED,
+        0,
+        { 0 },
         test_chip_set_addr,
     },
 };

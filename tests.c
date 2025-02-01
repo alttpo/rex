@@ -19,6 +19,11 @@ void syscall(struct rexlang_vm* vm, uint32_t fn) {
         chip_addr[chip & 0x3F] = addr;
         break;
     }
+    case 0x0001: { // chip-rdn-u8
+        u32 chip = pop(vm);
+        push(vm, 0);
+        break;
+    }
 
     default:
         throw_error(vm, REXLANG_ERR_BAD_SYSCALL);
@@ -372,7 +377,7 @@ int main(void) {
         }
     }
 
-#if 1
+    // ad-hoc tests:
     for (int i = 0; i < sizeof(tests)/sizeof(struct test_t); i++) {
         printf("executing test: %s\n", tests[i].name);
         int ret = exec_test(&tests[i], msg);
@@ -381,7 +386,6 @@ int main(void) {
             return ret;
         }
     }
-#endif
 
     return 0;
 }
